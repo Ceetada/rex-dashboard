@@ -1,0 +1,1460 @@
+// Evas — PostgreSQL data model.
+//
+// Conventions used throughout:
+//  * Money is NEVER a float. Every monetary column is BigInt holding *kobo*
+//    (1 NGN = 100 kobo). Naira has no sub-kobo denomination, so integer kobo is
+//    exact and immune to the rounding drift that eventually shows up in any
+//    Decimal/Float ledger.
+//  * PII that we must be able to read back (BVN, NIN, RSA number, smartcard
+//    numbers) is stored encrypted at the application layer — see
+//    src/common/crypto/encryption.service.ts. Those columns are typed as String
+//    but hold an AES-256-GCM envelope, and are suffixed `Encrypted`.
+//  * Anything we only need to *match* on (BVN lookups) also carries a blind
+//    index: a keyed HMAC that is searchable without being reversible.
+//  * Every table that a human can mutate is covered by AuditLog.
+//  * `deletedAt` marks soft deletion. NDPA gives users an erasure right, but
+//    financial records carry a statutory retention period, so deletion is a
+//    two-stage process: soft-delete + PII tokenisation now, hard purge after the
+//    retention window. See docs/17-compliance.md.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pgcrypto, citext]
+}
+
+// ───────────────────────────────────────────────────────────── Identity & access
+
+enum UserStatus {
+  PENDING_VERIFICATION
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+  CLOSED
+}
+
+enum KycTier {
+  // Nigerian financial services are tiered by how much identity you have proven.
+  // The tier caps wallet balance and transaction size — enforced in
+  // wallet/limits.service.ts, mirrored here so it is queryable.
+  TIER_0 // email only — cannot transact
+  TIER_1 // phone verified — low limits
+  TIER_2 // BVN or NIN verified — standard limits
+  TIER_3 // full KYC + address — highest limits
+}
+
+model User {
+  id                String     @id @default(uuid()) @db.Uuid
+  // citext: Nigerians type emails in every casing imaginable. Case-insensitive
+  // uniqueness at the DB level beats remembering to .toLowerCase() everywhere.
+  email             String     @unique @db.Citext
+  // E.164, always. Normalised on write — +2348012345678, never 08012345678.
+  phone             String?    @unique
+  passwordHash      String
+  status            UserStatus @default(PENDING_VERIFICATION)
+  kycTier           KycTier    @default(TIER_0)
+
+  emailVerifiedAt   DateTime?
+  phoneVerifiedAt   DateTime?
+
+  // Two-factor. `twoFactorSecretEncrypted` holds the TOTP seed; recovery codes
+  // are stored hashed (they are credentials, not data).
+  twoFactorEnabled  Boolean    @default(false)
+  twoFactorSecretEncrypted String?
+  twoFactorMethod   TwoFactorMethod?
+
+  // Credential-stuffing defence. Cleared on successful auth.
+  failedLoginCount  Int        @default(0)
+  lockedUntil       DateTime?
+  // Any token issued before this instant is rejected. Bumping it is our
+  // "log out everywhere" and our response to a password change or breach.
+  tokensValidFrom   DateTime   @default(now())
+  lastLoginAt       DateTime?
+
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  deletedAt         DateTime?
+
+  profile           Profile?
+  roles             UserRole[]
+  devices           Device[]
+  sessions          Session[]
+  refreshTokens     RefreshToken[]
+  otpChallenges     OtpChallenge[]
+  recoveryCodes     RecoveryCode[]
+  wallet            Wallet?
+  transactions      Transaction[]
+  healthSubscriptions HealthSubscription[]
+  retirementAccount RetirementAccount?
+  pensionAccount    PensionAccount?
+  savedRecipients   SavedRecipient[]
+  serviceOrders     ServiceOrder[]
+  notifications     Notification[]
+  notificationPrefs NotificationPreference?
+  auditLogs         AuditLog[]      @relation("AuditActor")
+  supportTickets    SupportTicket[]
+  consents          Consent[]
+
+  @@index([status, createdAt])
+  @@index([deletedAt])
+  @@map("users")
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  PREFER_NOT_TO_SAY
+}
+
+model Profile {
+  id            String    @id @default(uuid()) @db.Uuid
+  userId        String    @unique @db.Uuid
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  firstName     String
+  lastName      String
+  middleName    String?
+  dateOfBirth   DateTime? @db.Date
+  gender        Gender?
+  avatarUrl     String?
+
+  addressLine1  String?
+  addressLine2  String?
+  city          String?
+  // Nigeria's 36 states + FCT. Stored as a code (e.g. "LA", "FC") against the
+  // reference tables below so LGA can be validated against the state.
+  stateCode     String?
+  lgaCode       String?
+  postalCode    String?
+
+  // Government identifiers — encrypted at rest, never returned to the client in
+  // full. The API only ever emits a masked form (e.g. "•••••••1234").
+  bvnEncrypted  String?
+  // Keyed HMAC of the BVN. Lets us answer "is this BVN already registered?"
+  // without ever holding a reversible copy in an index.
+  bvnBlindIndex String?   @unique
+  ninEncrypted  String?
+  ninBlindIndex String?   @unique
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  state         State?    @relation(fields: [stateCode], references: [code])
+  lga           Lga?      @relation(fields: [lgaCode], references: [code])
+
+  @@index([stateCode, lgaCode])
+  @@map("profiles")
+}
+
+/// Reference data: Nigeria's states and their LGAs. Seeded, not user-editable.
+model State {
+  code     String    @id // "LA", "FC", "KN"
+  name     String    @unique
+  zone     String // geopolitical zone: "South West", "North Central", ...
+  lgas     Lga[]
+  profiles Profile[]
+
+  @@map("states")
+}
+
+model Lga {
+  code      String    @id
+  name      String
+  stateCode String
+  state     State     @relation(fields: [stateCode], references: [code])
+  profiles  Profile[]
+
+  @@unique([stateCode, name])
+  @@index([stateCode])
+  @@map("lgas")
+}
+
+// ───────────────────────────────────────────────────────────── RBAC
+
+/// Roles are data, not an enum, so an admin can define "Support Tier 2" without
+/// a deploy. The seeded set is: user, support, ops, admin, super_admin.
+model Role {
+  id          String           @id @default(uuid()) @db.Uuid
+  name        String           @unique // machine name, e.g. "support"
+  label       String
+  description String?
+  // Guards a small set of roles from being edited or deleted through the admin UI.
+  isSystem    Boolean          @default(false)
+  createdAt   DateTime         @default(now())
+
+  users       UserRole[]
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+/// Permissions are `resource:action` strings — "health_plan:update",
+/// "user:suspend", "transaction:read". Guards check these, never role names,
+/// so re-organising roles never breaks an endpoint.
+model Permission {
+  id          String           @id @default(uuid()) @db.Uuid
+  key         String           @unique
+  resource    String
+  action      String
+  description String?
+
+  roles       RolePermission[]
+
+  @@unique([resource, action])
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String     @db.Uuid
+  permissionId String     @db.Uuid
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  userId     String   @db.Uuid
+  roleId     String   @db.Uuid
+  grantedAt  DateTime @default(now())
+  grantedBy  String?  @db.Uuid
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role       Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@index([roleId])
+  @@map("user_roles")
+}
+
+// ───────────────────────────────────────────────────────────── Sessions & devices
+
+model Device {
+  id             String    @id @default(uuid()) @db.Uuid
+  userId         String    @db.Uuid
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Stable per-install fingerprint from the client, hashed server-side.
+  fingerprint    String
+  name           String // "Chrome on Windows", "Evas iOS"
+  platform       String?
+  browser        String?
+  osVersion      String?
+
+  // A device the user has explicitly confirmed. Unrecognised devices trigger a
+  // step-up challenge and a "new sign-in" notification.
+  trusted        Boolean   @default(false)
+  trustedAt      DateTime?
+  lastSeenAt     DateTime  @default(now())
+  lastIpHash     String? // hashed: an IP is personal data under NDPA
+  lastLocation   String? // coarse, city-level only
+
+  revokedAt      DateTime?
+  createdAt      DateTime  @default(now())
+
+  sessions       Session[]
+
+  @@unique([userId, fingerprint])
+  @@index([userId, lastSeenAt])
+  @@map("devices")
+}
+
+model Session {
+  id            String    @id @default(uuid()) @db.Uuid
+  userId        String    @db.Uuid
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deviceId      String?   @db.Uuid
+  device        Device?   @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+
+  // "Remember me" extends absolute expiry from 12h to 30d. Idle timeout still
+  // applies either way.
+  rememberMe    Boolean   @default(false)
+  expiresAt     DateTime
+  lastActivityAt DateTime @default(now())
+  revokedAt     DateTime?
+  revokedReason String?
+
+  createdAt     DateTime  @default(now())
+
+  refreshTokens RefreshToken[]
+
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+/// Refresh tokens rotate on every use. We store only a SHA-256 hash — a database
+/// leak must not yield usable tokens.
+model RefreshToken {
+  id            String    @id @default(uuid()) @db.Uuid
+  userId        String    @db.Uuid
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionId     String    @db.Uuid
+  session       Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  tokenHash     String    @unique
+  // Rotation chain. If a token that was already rotated is presented again, it
+  // has been replayed — we revoke the entire chain and force re-auth. This is
+  // the standard refresh-token-reuse detection.
+  replacedById  String?   @db.Uuid
+  usedAt        DateTime?
+  expiresAt     DateTime
+  revokedAt     DateTime?
+
+  createdAt     DateTime  @default(now())
+
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+enum TwoFactorMethod {
+  TOTP
+  SMS
+  EMAIL
+}
+
+enum OtpPurpose {
+  PHONE_VERIFICATION
+  EMAIL_VERIFICATION
+  LOGIN_2FA
+  PASSWORD_RESET
+  TRANSACTION_APPROVAL
+  DEVICE_TRUST
+}
+
+/// OTP codes are hashed, attempt-limited and single-use. Never stored in plain
+/// text — an OTP is a credential for the seconds it lives.
+model OtpChallenge {
+  id          String     @id @default(uuid()) @db.Uuid
+  userId      String?    @db.Uuid
+  user        User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Where the code was sent — phone or email. Kept so a challenge survives the
+  // user changing their contact details mid-flow.
+  destination String
+  purpose     OtpPurpose
+  codeHash    String
+  attempts    Int        @default(0)
+  maxAttempts Int        @default(5)
+  consumedAt  DateTime?
+  expiresAt   DateTime
+  createdAt   DateTime   @default(now())
+
+  @@index([userId, purpose, consumedAt])
+  @@index([expiresAt])
+  @@map("otp_challenges")
+}
+
+/// Single-use 2FA recovery codes, stored hashed.
+model RecoveryCode {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash  String
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, usedAt])
+  @@map("recovery_codes")
+}
+
+enum TokenPurpose {
+  PASSWORD_RESET
+  EMAIL_VERIFICATION
+  EMAIL_CHANGE
+}
+
+/// Emailed links (password reset, address confirmation). Hashed, single-use.
+model VerificationToken {
+  id        String       @id @default(uuid()) @db.Uuid
+  tokenHash String       @unique
+  purpose   TokenPurpose
+  // Not a FK: an email-change token must reference an address that is not yet
+  // attached to the account.
+  identifier String
+  payload   Json?
+  consumedAt DateTime?
+  expiresAt DateTime
+  createdAt DateTime     @default(now())
+
+  @@index([identifier, purpose])
+  @@map("verification_tokens")
+}
+
+// ───────────────────────────────────────────────────────────── Provider abstraction
+
+enum ProviderCategory {
+  VTU // airtime + data
+  CABLE
+  PAYMENT
+  HMO
+  PENSION
+  MESSAGING
+}
+
+enum ProviderStatus {
+  ACTIVE
+  DEGRADED
+  DISABLED
+}
+
+/// One row per integrated third party. The application talks to an *adapter*
+/// resolved by `slug`, never to a vendor SDK directly — so swapping a failing
+/// VTU aggregator is a config change plus one adapter class, not a refactor.
+/// `priority` drives failover ordering within a category.
+model Provider {
+  id          String           @id @default(uuid()) @db.Uuid
+  slug        String           @unique // "paystack", "flutterwave", "vtpass"
+  name        String
+  category    ProviderCategory
+  status      ProviderStatus   @default(ACTIVE)
+  priority    Int              @default(100) // lower wins
+  // Non-secret configuration only (base URLs, feature flags, callback paths).
+  // Credentials live in the secrets manager, keyed by slug.
+  config      Json             @default("{}")
+  // Rolling health, updated by the circuit breaker.
+  healthyAt   DateTime?
+  failureCount Int             @default(0)
+
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  serviceOrders ServiceOrder[]
+  transactions  Transaction[]
+
+  @@index([category, status, priority])
+  @@map("providers")
+}
+
+// ───────────────────────────────────────────────────────────── Wallet & ledger
+
+model Wallet {
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String   @unique @db.Uuid
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Kobo. Never a float. `balance` is settled funds; `ledgerBalance` includes
+  // pending debits so a user cannot spend the same naira twice while a VTU
+  // purchase is still in flight.
+  balance       BigInt   @default(0)
+  ledgerBalance BigInt   @default(0)
+  currency      String   @default("NGN")
+
+  isFrozen      Boolean  @default(false)
+  frozenReason  String?
+
+  // Optimistic concurrency: every balance mutation bumps this inside the same
+  // transaction, so two concurrent debits cannot both read a stale balance.
+  version       Int      @default(0)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  entries       LedgerEntry[]
+
+  @@map("wallets")
+}
+
+enum LedgerDirection {
+  CREDIT
+  DEBIT
+}
+
+/// Append-only double-entry ledger. Rows are never updated or deleted; a
+/// correction is a new compensating entry. `balanceAfter` is denormalised so a
+/// statement can be rendered without replaying the whole history.
+model LedgerEntry {
+  id            String          @id @default(uuid()) @db.Uuid
+  walletId      String          @db.Uuid
+  wallet        Wallet          @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  transactionId String?         @db.Uuid
+  transaction   Transaction?    @relation(fields: [transactionId], references: [id])
+
+  direction     LedgerDirection
+  amount        BigInt // kobo, always positive; direction carries the sign
+  balanceAfter  BigInt
+  narration     String
+
+  createdAt     DateTime        @default(now())
+
+  @@index([walletId, createdAt])
+  @@index([transactionId])
+  @@map("ledger_entries")
+}
+
+enum TransactionType {
+  WALLET_FUNDING
+  WALLET_WITHDRAWAL
+  AIRTIME_PURCHASE
+  DATA_PURCHASE
+  CABLE_SUBSCRIPTION
+  HEALTH_PREMIUM
+  RETIREMENT_CONTRIBUTION
+  REFUND
+  REVERSAL
+  FEE
+}
+
+enum TransactionStatus {
+  PENDING
+  PROCESSING
+  SUCCESSFUL
+  FAILED
+  REVERSED
+  // The provider neither confirmed nor denied. Requires reconciliation before
+  // we either settle or refund — the single most important state in a VTU
+  // system, and the one naive implementations omit.
+  REQUIRES_RECONCILIATION
+}
+
+enum PaymentChannel {
+  WALLET
+  CARD
+  BANK_TRANSFER
+  USSD
+}
+
+model Transaction {
+  id            String            @id @default(uuid()) @db.Uuid
+  // Human-facing reference shown in the UI and to support: "EVS-8F3K2M9Q".
+  reference     String            @unique
+  userId        String            @db.Uuid
+  user          User              @relation(fields: [userId], references: [id])
+  providerId    String?           @db.Uuid
+  provider      Provider?         @relation(fields: [providerId], references: [id])
+
+  type          TransactionType
+  status        TransactionStatus @default(PENDING)
+  channel       PaymentChannel    @default(WALLET)
+
+  amount        BigInt // kobo
+  fee           BigInt            @default(0)
+  total         BigInt
+  currency      String            @default("NGN")
+
+  // The caller-supplied key that makes retries safe. A double-tapped "Buy"
+  // button must never produce two purchases.
+  idempotencyKey String?          @unique
+  providerReference String?
+  // Raw provider payload, retained for dispute resolution. Scrubbed of card
+  // data before it is written.
+  providerResponse Json?
+  failureReason String?
+
+  description   String
+  metadata      Json              @default("{}")
+
+  initiatedAt   DateTime          @default(now())
+  completedAt   DateTime?
+  reversedAt    DateTime?
+
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  ledgerEntries LedgerEntry[]
+  serviceOrder  ServiceOrder?
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@index([type, status])
+  @@index([providerReference])
+  @@map("transactions")
+}
+
+// ───────────────────────────────────────────────────────────── Health plans
+
+enum PlanTier {
+  BASIC
+  FAMILY
+  PREMIUM
+}
+
+enum BillingCycle {
+  MONTHLY
+  QUARTERLY
+  ANNUAL
+}
+
+/// Catalogue of HMO products. Adding a fourth tier is inserting a row — nothing
+/// in the codebase branches on PlanTier for presentation.
+model HealthPlan {
+  id              String       @id @default(uuid()) @db.Uuid
+  slug            String       @unique
+  name            String
+  tier            PlanTier
+  tagline         String?
+  description     String
+
+  hmoProviderId   String?      @db.Uuid
+  hmoProvider     HmoProvider? @relation(fields: [hmoProviderId], references: [id])
+
+  premiumAmount   BigInt // kobo per billing cycle
+  billingCycle    BillingCycle @default(MONTHLY)
+
+  // Family plans cover dependants; Basic does not. 1 = principal only.
+  maxDependants   Int          @default(0)
+  // Displayed as-is on the plan card, ordered.
+  coverageLimit   BigInt? // annual cap in kobo, null = uncapped
+  waitingPeriodDays Int        @default(0)
+
+  isActive        Boolean      @default(true)
+  isPubliclyListed Boolean     @default(true)
+  displayOrder    Int          @default(0)
+
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  benefits        PlanBenefit[]
+  subscriptions   HealthSubscription[]
+
+  @@index([isActive, displayOrder])
+  @@map("health_plans")
+}
+
+enum BenefitCategory {
+  // These drive the icon and grouping on the plan card. New categories are
+  // additive; the UI renders whatever it is given.
+  OUTPATIENT
+  INPATIENT
+  EMERGENCY
+  SPECIALIST
+  DENTAL
+  OPTICAL
+  MATERNITY
+  DIAGNOSTICS
+  PHARMACY
+  MENTAL_HEALTH
+  WELLNESS
+}
+
+model PlanBenefit {
+  id           String          @id @default(uuid()) @db.Uuid
+  planId       String          @db.Uuid
+  plan         HealthPlan      @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  category     BenefitCategory
+  title        String
+  description  String?
+  // e.g. "₦150,000 per year", "2 visits per quarter". Free text because HMO
+  // benefit language is not normalisable across providers.
+  limitLabel   String?
+  isIncluded   Boolean         @default(true)
+  displayOrder Int             @default(0)
+
+  @@index([planId, displayOrder])
+  @@map("plan_benefits")
+}
+
+model HmoProvider {
+  id           String       @id @default(uuid()) @db.Uuid
+  name         String       @unique
+  logoUrl      String?
+  // NHIA accreditation number — regulated entities must be verifiable.
+  accreditationNo String?
+  supportPhone String?
+  supportEmail String?
+  isActive     Boolean      @default(true)
+
+  plans        HealthPlan[]
+  hospitals    Hospital[]
+
+  @@map("hmo_providers")
+}
+
+/// The hospital network shown on a plan. Geo columns power "find a hospital
+/// near me", which is the single most-used feature of any Nigerian HMO app.
+model Hospital {
+  id            String      @id @default(uuid()) @db.Uuid
+  hmoProviderId String      @db.Uuid
+  hmoProvider   HmoProvider @relation(fields: [hmoProviderId], references: [id], onDelete: Cascade)
+
+  name          String
+  address       String
+  city          String
+  stateCode     String
+  phone         String?
+  latitude      Float?
+  longitude     Float?
+  tier          String? // "primary", "secondary", "tertiary"
+  isActive      Boolean     @default(true)
+
+  @@index([stateCode, city])
+  @@index([hmoProviderId, isActive])
+  @@map("hospitals")
+}
+
+enum SubscriptionStatus {
+  PENDING_PAYMENT
+  ACTIVE
+  GRACE_PERIOD
+  EXPIRED
+  CANCELLED
+  SUSPENDED
+}
+
+model HealthSubscription {
+  id              String             @id @default(uuid()) @db.Uuid
+  userId          String             @db.Uuid
+  user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planId          String             @db.Uuid
+  plan            HealthPlan         @relation(fields: [planId], references: [id])
+
+  // The HMO's own member number, issued on activation. Encrypted: it is the
+  // key to a person's medical identity.
+  memberNumberEncrypted String?
+  status          SubscriptionStatus @default(PENDING_PAYMENT)
+
+  startDate       DateTime
+  renewalDate     DateTime
+  endDate         DateTime?
+  cancelledAt     DateTime?
+  cancellationReason String?
+
+  autoRenew       Boolean            @default(true)
+  premiumAmount   BigInt // snapshot — the catalogue price may change later
+  billingCycle    BillingCycle
+
+  // Denormalised so the dashboard card renders in one query.
+  primaryHospitalId String?          @db.Uuid
+
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  dependants      Dependant[]
+  claims          Claim[]
+
+  @@index([userId, status])
+  @@index([renewalDate, status])
+  @@map("health_subscriptions")
+}
+
+enum DependantRelationship {
+  SPOUSE
+  CHILD
+  PARENT
+  SIBLING
+  OTHER
+}
+
+model Dependant {
+  id             String                @id @default(uuid()) @db.Uuid
+  subscriptionId String                @db.Uuid
+  subscription   HealthSubscription    @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  firstName      String
+  lastName       String
+  dateOfBirth    DateTime              @db.Date
+  gender         Gender?
+  relationship   DependantRelationship
+  memberNumberEncrypted String?
+  isActive       Boolean               @default(true)
+
+  createdAt      DateTime              @default(now())
+
+  @@index([subscriptionId, isActive])
+  @@map("dependants")
+}
+
+enum ClaimStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  PAID
+}
+
+model Claim {
+  id             String             @id @default(uuid()) @db.Uuid
+  subscriptionId String             @db.Uuid
+  subscription   HealthSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  reference      String             @unique
+  hospitalName   String
+  serviceDate    DateTime
+  amount         BigInt
+  status         ClaimStatus        @default(SUBMITTED)
+  description    String
+  // S3 keys, not URLs — links are signed on read and expire.
+  documentKeys   String[]
+  reviewedAt     DateTime?
+  reviewerNote   String?
+
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@index([subscriptionId, status])
+  @@map("claims")
+}
+
+// ───────────────────────────────────────────────────────────── Retirement & pension
+
+enum RiskProfile {
+  CONSERVATIVE
+  BALANCED
+  AGGRESSIVE
+}
+
+/// Voluntary retirement savings — the part the user actively contributes to and
+/// can see grow. Distinct from the statutory pension below.
+model RetirementAccount {
+  id                String      @id @default(uuid()) @db.Uuid
+  userId            String      @unique @db.Uuid
+  user              User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  accountNumber     String      @unique
+  riskProfile       RiskProfile @default(BALANCED)
+
+  // All kobo. `balance` = contributions + growth - withdrawals, maintained
+  // transactionally alongside the contribution rows.
+  balance           BigInt      @default(0)
+  totalContributed  BigInt      @default(0)
+  totalGrowth       BigInt      @default(0)
+  totalWithdrawn    BigInt      @default(0)
+
+  targetAmount      BigInt?
+  targetDate        DateTime?
+
+  autoDebitEnabled  Boolean     @default(false)
+  autoDebitAmount   BigInt?
+  autoDebitDayOfMonth Int?
+
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  contributions     RetirementContribution[]
+  holdings          InvestmentHolding[]
+  valuations        AccountValuation[]
+
+  @@map("retirement_accounts")
+}
+
+enum ContributionSource {
+  MANUAL
+  AUTO_DEBIT
+  EMPLOYER
+  BONUS
+}
+
+model RetirementContribution {
+  id            String             @id @default(uuid()) @db.Uuid
+  accountId     String             @db.Uuid
+  account       RetirementAccount  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  amount        BigInt
+  source        ContributionSource @default(MANUAL)
+  transactionId String?            @db.Uuid
+  // The month this contribution counts toward, normalised to the 1st. Makes the
+  // monthly chart a simple GROUP BY instead of date arithmetic per request.
+  periodMonth   DateTime           @db.Date
+  narration     String?
+
+  createdAt     DateTime           @default(now())
+
+  @@index([accountId, periodMonth])
+  @@map("retirement_contributions")
+}
+
+enum AssetClass {
+  EQUITY
+  FIXED_INCOME
+  MONEY_MARKET
+  REAL_ESTATE
+  MUTUAL_FUND
+}
+
+/// The investment breakdown behind a retirement balance — what powers the
+/// allocation donut on the retirement screen.
+model InvestmentHolding {
+  id           String            @id @default(uuid()) @db.Uuid
+  accountId    String            @db.Uuid
+  account      RetirementAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  assetClass   AssetClass
+  instrument   String // "FGN Bond 2031", "Money Market Fund"
+  units        Decimal           @db.Decimal(20, 6)
+  // Unit prices are genuinely fractional, so Decimal is correct here — unlike
+  // wallet balances, this is not a settled cash amount.
+  unitCost     Decimal           @db.Decimal(20, 6)
+  currentValue BigInt // kobo, marked to market
+  allocationPct Decimal          @db.Decimal(5, 2)
+
+  updatedAt    DateTime          @updatedAt
+
+  @@index([accountId, assetClass])
+  @@map("investment_holdings")
+}
+
+/// Daily/monthly snapshots. Charts read from here rather than recomputing from
+/// the contribution history, which keeps the dashboard fast as history grows.
+model AccountValuation {
+  id         String            @id @default(uuid()) @db.Uuid
+  accountId  String            @db.Uuid
+  account    RetirementAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  asOfDate   DateTime          @db.Date
+  balance    BigInt
+  contributed BigInt
+  growth     BigInt
+
+  @@unique([accountId, asOfDate])
+  @@index([accountId, asOfDate])
+  @@map("account_valuations")
+}
+
+/// Statutory pension under the Pension Reform Act — read-mostly data mirrored
+/// from the user's PFA. We are not the system of record here, so everything
+/// carries a `lastSyncedAt` and the UI labels it as provider-sourced.
+model PensionAccount {
+  id                  String        @id @default(uuid()) @db.Uuid
+  userId              String        @unique @db.Uuid
+  user                User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  pfaId               String        @db.Uuid
+  pfa                 PensionFundAdmin @relation(fields: [pfaId], references: [id])
+
+  // Retirement Savings Account number — a lifelong national identifier.
+  // Encrypted; surfaced masked ("PEN••••••4821").
+  rsaNumberEncrypted  String
+  rsaBlindIndex       String        @unique
+
+  employerName        String?
+  employmentStartDate DateTime?     @db.Date
+
+  totalContributions  BigInt        @default(0)
+  employeeContributions BigInt      @default(0)
+  employerContributions BigInt      @default(0)
+  totalReturns        BigInt        @default(0)
+  currentBalance      BigInt        @default(0)
+
+  // Projection inputs, so the estimate is reproducible and explainable rather
+  // than a magic number.
+  estimatedBenefit    BigInt?
+  projectionRate      Decimal?      @db.Decimal(5, 2)
+  retirementAge       Int           @default(60)
+
+  lastSyncedAt        DateTime?
+  syncStatus          String?
+
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  contributions       PensionContribution[]
+  statements          PensionStatement[]
+
+  @@map("pension_accounts")
+}
+
+model PensionFundAdmin {
+  id           String           @id @default(uuid()) @db.Uuid
+  name         String           @unique
+  code         String           @unique
+  logoUrl      String?
+  // PenCom licence number.
+  licenceNo    String?
+  supportPhone String?
+  isActive     Boolean          @default(true)
+
+  accounts     PensionAccount[]
+
+  @@map("pension_fund_admins")
+}
+
+enum PensionContributionType {
+  EMPLOYEE
+  EMPLOYER
+  VOLUNTARY
+  ADDITIONAL
+}
+
+model PensionContribution {
+  id          String                  @id @default(uuid()) @db.Uuid
+  accountId   String                  @db.Uuid
+  account     PensionAccount          @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  type        PensionContributionType
+  amount      BigInt
+  periodMonth DateTime                @db.Date
+  employerName String?
+  // The PFA's own reference, used to dedupe on re-sync.
+  externalReference String?
+
+  createdAt   DateTime                @default(now())
+
+  @@unique([accountId, externalReference])
+  @@index([accountId, periodMonth])
+  @@map("pension_contributions")
+}
+
+model PensionStatement {
+  id          String         @id @default(uuid()) @db.Uuid
+  accountId   String         @db.Uuid
+  account     PensionAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  periodStart DateTime       @db.Date
+  periodEnd   DateTime       @db.Date
+  openingBalance BigInt
+  closingBalance BigInt
+  totalCredits   BigInt
+  totalReturns   BigInt
+  // S3 object key. Statements contain full financial history, so downloads are
+  // short-lived signed URLs and every access is audit-logged.
+  documentKey String?
+
+  createdAt   DateTime       @default(now())
+
+  @@unique([accountId, periodStart, periodEnd])
+  @@map("pension_statements")
+}
+
+// ───────────────────────────────────────────────────────────── Digital services (VTU)
+
+enum ServiceType {
+  AIRTIME
+  DATA
+  CABLE
+  // Electricity is the obvious next one; the schema and adapters already allow
+  // it without migration beyond adding the enum member.
+  ELECTRICITY
+}
+
+enum NetworkOperator {
+  MTN
+  AIRTEL
+  GLO
+  NINE_MOBILE
+}
+
+/// Catalogue of purchasable service products. Data bundles and cable packages
+/// are the same shape, which is why one table serves both — a new provider adds
+/// rows, not tables.
+model ServiceProduct {
+  id            String           @id @default(uuid()) @db.Uuid
+  serviceType   ServiceType
+  // For DATA/AIRTIME this is the network; for CABLE it is null and `billerCode`
+  // identifies DStv/GOtv/Startimes.
+  network       NetworkOperator?
+  billerCode    String? // "dstv", "gotv", "startimes"
+
+  // The code the *provider* expects. Kept separate from our own slug so an
+  // aggregator switch does not change our public API.
+  externalCode  String
+  name          String // "1.5GB Monthly", "DStv Compact"
+  description   String?
+
+  amount        BigInt // kobo
+  // What we actually pay the aggregator — margin is amount - costPrice.
+  costPrice     BigInt?
+  validityDays  Int?
+
+  isActive      Boolean          @default(true)
+  displayOrder  Int              @default(0)
+
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  orders        ServiceOrder[]
+
+  @@unique([serviceType, network, billerCode, externalCode])
+  @@index([serviceType, network, isActive])
+  @@map("service_products")
+}
+
+enum ServiceOrderStatus {
+  PENDING
+  PROCESSING
+  DELIVERED
+  FAILED
+  REFUNDED
+  REQUIRES_RECONCILIATION
+}
+
+/// One row per purchase attempt. Separate from Transaction because the money
+/// movement and the *delivery* of the thing bought fail independently — a
+/// wallet debit can succeed while MTN fails to credit the line, and that gap is
+/// exactly where refunds live.
+model ServiceOrder {
+  id            String             @id @default(uuid()) @db.Uuid
+  reference     String             @unique
+  userId        String             @db.Uuid
+  user          User               @relation(fields: [userId], references: [id])
+  transactionId String?            @unique @db.Uuid
+  transaction   Transaction?       @relation(fields: [transactionId], references: [id])
+  productId     String?            @db.Uuid
+  product       ServiceProduct?    @relation(fields: [productId], references: [id])
+  providerId    String?            @db.Uuid
+  provider      Provider?          @relation(fields: [providerId], references: [id])
+
+  serviceType   ServiceType
+  network       NetworkOperator?
+  billerCode    String?
+
+  // Phone number for airtime/data, smartcard/IUC number for cable. Encrypted:
+  // a smartcard number identifies a household.
+  recipientEncrypted String
+  // Masked form kept in the clear purely for list rendering ("0803•••4821"),
+  // so history screens do not need to decrypt every row.
+  recipientMasked String
+
+  amount        BigInt
+  status        ServiceOrderStatus @default(PENDING)
+
+  providerReference String?
+  providerResponse  Json?
+  failureReason String?
+  // VTU aggregators fail transiently far more often than card processors, so
+  // retries are first-class rather than an afterthought.
+  attemptCount  Int                @default(0)
+  lastAttemptAt DateTime?
+
+  deliveredAt   DateTime?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@index([serviceType, status])
+  @@map("service_orders")
+}
+
+/// Saved beneficiaries — "Mum's line", "My DStv". Removes the single biggest
+/// source of costly user error: mistyping a recipient number.
+model SavedRecipient {
+  id            String           @id @default(uuid()) @db.Uuid
+  userId        String           @db.Uuid
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  label         String
+  serviceType   ServiceType
+  network       NetworkOperator?
+  billerCode    String?
+
+  recipientEncrypted String
+  recipientMasked    String
+  // Blind index so "have I saved this number already?" works without decryption.
+  recipientBlindIndex String
+
+  isFavourite   Boolean          @default(false)
+  lastUsedAt    DateTime?
+  useCount      Int              @default(0)
+
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@unique([userId, serviceType, recipientBlindIndex])
+  @@index([userId, isFavourite, lastUsedAt])
+  @@map("saved_recipients")
+}
+
+// ───────────────────────────────────────────────────────────── Notifications
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  SMS
+  PUSH
+}
+
+enum NotificationCategory {
+  SECURITY
+  TRANSACTION
+  HEALTH
+  RETIREMENT
+  SERVICE
+  ANNOUNCEMENT
+  MARKETING
+}
+
+model Notification {
+  id         String               @id @default(uuid()) @db.Uuid
+  userId     String               @db.Uuid
+  user       User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  category   NotificationCategory
+  title      String
+  body       String
+  // Where tapping the notification takes the user, e.g. "/services/airtime/EVS-123".
+  actionUrl  String?
+  // Arbitrary payload for rendering rich rows (amount, network, status).
+  data       Json                 @default("{}")
+
+  readAt     DateTime?
+  archivedAt DateTime?
+
+  createdAt  DateTime             @default(now())
+
+  deliveries NotificationDelivery[]
+
+  @@index([userId, readAt, createdAt])
+  @@index([userId, category])
+  @@map("notifications")
+}
+
+enum DeliveryStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  FAILED
+  BOUNCED
+  // The user's preferences said no. Recorded rather than silently dropped, so
+  // "why didn't I get an SMS?" is answerable from data.
+  SUPPRESSED
+}
+
+/// One row per channel attempt, so a single notification's email/SMS/push fates
+/// are tracked independently.
+model NotificationDelivery {
+  id             String              @id @default(uuid()) @db.Uuid
+  notificationId String              @db.Uuid
+  notification   Notification        @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  channel        NotificationChannel
+  status         DeliveryStatus      @default(QUEUED)
+  providerMessageId String?
+  failureReason  String?
+  attempts       Int                 @default(0)
+  sentAt         DateTime?
+  deliveredAt    DateTime?
+
+  createdAt      DateTime            @default(now())
+
+  @@index([notificationId, channel])
+  @@index([status, createdAt])
+  @@map("notification_deliveries")
+}
+
+/// Per-category, per-channel opt-outs. Security notifications are deliberately
+/// not user-disableable — the service layer refuses to suppress them.
+model NotificationPreference {
+  id                String   @id @default(uuid()) @db.Uuid
+  userId            String   @unique @db.Uuid
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  emailEnabled      Boolean  @default(true)
+  smsEnabled        Boolean  @default(true)
+  pushEnabled       Boolean  @default(true)
+  inAppEnabled      Boolean  @default(true)
+
+  // Category-level overrides: { "MARKETING": { "email": false, "sms": false } }
+  categoryOverrides Json     @default("{}")
+
+  // Quiet hours in the user's local time. Non-urgent notifications queue until
+  // the window closes; SECURITY always ignores it.
+  quietHoursStart   String?
+  quietHoursEnd     String?
+  timezone          String   @default("Africa/Lagos")
+
+  updatedAt         DateTime @updatedAt
+
+  @@map("notification_preferences")
+}
+
+/// Broadcast messages from the admin portal. Fanned out to Notification rows by
+/// a background job so a 1M-user announcement does not block the request.
+model Announcement {
+  id          String               @id @default(uuid()) @db.Uuid
+  title       String
+  body        String
+  category    NotificationCategory @default(ANNOUNCEMENT)
+  channels    NotificationChannel[]
+
+  // JSON audience filter: { "kycTier": ["TIER_2"], "hasHealthPlan": true }.
+  audience    Json                 @default("{}")
+
+  scheduledFor DateTime?
+  sentAt      DateTime?
+  recipientCount Int               @default(0)
+
+  createdById String               @db.Uuid
+  createdAt   DateTime             @default(now())
+
+  @@index([sentAt, scheduledFor])
+  @@map("announcements")
+}
+
+// ───────────────────────────────────────────────────────────── Support
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_ON_USER
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+model SupportTicket {
+  id          String         @id @default(uuid()) @db.Uuid
+  reference   String         @unique
+  userId      String         @db.Uuid
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  subject     String
+  category    String
+  status      TicketStatus   @default(OPEN)
+  priority    TicketPriority @default(NORMAL)
+  assignedToId String?       @db.Uuid
+
+  // Links a ticket to the thing it is about, so support sees context without
+  // asking the user to re-explain.
+  relatedTransactionId String? @db.Uuid
+
+  resolvedAt  DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  messages    TicketMessage[]
+
+  @@index([status, priority, createdAt])
+  @@index([userId, status])
+  @@map("support_tickets")
+}
+
+model TicketMessage {
+  id        String        @id @default(uuid()) @db.Uuid
+  ticketId  String        @db.Uuid
+  ticket    SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  authorId  String        @db.Uuid
+  isStaff   Boolean       @default(false)
+  body      String
+  attachmentKeys String[]
+  // Staff-only notes, never returned on the user-facing endpoint.
+  isInternal Boolean      @default(false)
+
+  createdAt DateTime      @default(now())
+
+  @@index([ticketId, createdAt])
+  @@map("ticket_messages")
+}
+
+// ───────────────────────────────────────────────────────────── Audit & compliance
+
+/// Append-only. Written for every state change and every privileged read.
+/// This table is what makes "who suspended this account, and when?" answerable
+/// — a hard requirement for CBN/NDPA examination.
+model AuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+
+  // Null for system/automated actions.
+  actorId     String?  @db.Uuid
+  actor       User?    @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  actorType   String   @default("USER") // USER | ADMIN | SYSTEM | PROVIDER
+
+  action      String // "user.suspend", "transaction.reverse"
+  resource    String
+  resourceId  String?
+
+  // Before/after snapshots, field-filtered to exclude secrets.
+  before      Json?
+  after       Json?
+
+  ipHash      String?
+  userAgent   String?
+  requestId   String?
+  outcome     String   @default("SUCCESS") // SUCCESS | FAILURE | DENIED
+  reason      String?
+
+  createdAt   DateTime @default(now())
+
+  @@index([actorId, createdAt])
+  @@index([resource, resourceId])
+  @@index([action, createdAt])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+enum ConsentType {
+  TERMS_OF_SERVICE
+  PRIVACY_POLICY
+  MARKETING
+  DATA_PROCESSING
+  CREDIT_CHECK
+}
+
+/// NDPA requires consent to be specific, informed and revocable — and requires
+/// us to prove what a user agreed to and when. Version-stamped so a policy
+/// change can re-prompt only the users who have not accepted the new text.
+model Consent {
+  id          String      @id @default(uuid()) @db.Uuid
+  userId      String      @db.Uuid
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type        ConsentType
+  version     String // "2026-01-15"
+  granted     Boolean
+  ipHash      String?
+  grantedAt   DateTime    @default(now())
+  revokedAt   DateTime?
+
+  @@index([userId, type, grantedAt])
+  @@map("consents")
+}
+
+/// Idempotency ledger for mutating API calls. Stores the *response* so a retry
+/// with the same key replays the original result instead of re-executing.
+model IdempotencyRecord {
+  key           String   @id
+  userId        String?  @db.Uuid
+  endpoint      String
+  // Hash of the request body: same key + different body is a client bug, and
+  // we return 422 rather than silently replaying an unrelated response.
+  requestHash   String
+  statusCode    Int?
+  responseBody  Json?
+  lockedAt      DateTime?
+  completedAt   DateTime?
+  expiresAt     DateTime
+
+  createdAt     DateTime @default(now())
+
+  @@index([expiresAt])
+  @@map("idempotency_records")
+}
+
+/// Inbound provider webhooks, recorded before processing. Lets us replay a
+/// missed callback and prevents double-processing a redelivery.
+model WebhookEvent {
+  id             String    @id @default(uuid()) @db.Uuid
+  providerSlug   String
+  eventType      String
+  // Provider's own event id — the dedupe key.
+  externalId     String
+  payload        Json
+  signatureValid Boolean   @default(false)
+  processedAt    DateTime?
+  failureReason  String?
+  attempts       Int       @default(0)
+
+  createdAt      DateTime  @default(now())
+
+  @@unique([providerSlug, externalId])
+  @@index([processedAt, createdAt])
+  @@map("webhook_events")
+}
+
+/// Feature flags, so a new provider or module can be dark-launched and rolled
+/// out to a percentage of users without a deploy.
+model FeatureFlag {
+  key         String   @id
+  description String?
+  enabled     Boolean  @default(false)
+  rolloutPct  Int      @default(0)
+  // Optional allowlist for internal testing before a percentage rollout.
+  userIds     String[]
+  updatedAt   DateTime @updatedAt
+
+  @@map("feature_flags")
+}

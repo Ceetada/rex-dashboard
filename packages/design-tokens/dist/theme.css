@@ -1,0 +1,352 @@
+/**
+ * GENERATED FILE — do not edit by hand.
+ * Source: packages/design-tokens/src/*  •  Regenerate with `pnpm tokens`.
+ *
+ * Every colour here descends from brand/evas-logo.jpg. All foreground/background
+ * pairings in both themes are asserted at >= 4.5:1 by contrast.test.ts.
+ */
+
+:root {
+  /* ---- Raw palette (reference only; components should use semantic roles) ---- */
+  --palette-green-50: #E7FFED;
+  --palette-green-100: #CEF3D7;
+  --palette-green-200: #AFDEBB;
+  --palette-green-300: #8CC39C;
+  --palette-green-400: #67A67A;
+  --palette-green-500: #3E8758;
+  --palette-green-600: #006634;
+  --palette-green-700: #005329;
+  --palette-green-800: #00431F;
+  --palette-green-900: #003417;
+  --palette-green-950: #00260E;
+  --palette-gold-50: #FFF7DF;
+  --palette-gold-100: #FFF2C7;
+  --palette-gold-200: #FFE89F;
+  --palette-gold-300: #FFDD68;
+  --palette-gold-400: #FCCF02;
+  --palette-gold-500: #D2AC00;
+  --palette-gold-600: #AD8D00;
+  --palette-gold-700: #8B7100;
+  --palette-gold-800: #6B5700;
+  --palette-gold-900: #4E3E00;
+  --palette-gold-950: #332800;
+  --palette-neutral-50: #F8FBF9;
+  --palette-neutral-100: #F2F5F2;
+  --palette-neutral-200: #E4E7E5;
+  --palette-neutral-300: #D3D6D4;
+  --palette-neutral-400: #BCBFBD;
+  --palette-neutral-500: #9C9F9D;
+  --palette-neutral-600: #6A6F6B;
+  --palette-neutral-700: #555A56;
+  --palette-neutral-800: #424643;
+  --palette-neutral-900: #2E322F;
+  --palette-neutral-950: #161A17;
+  --palette-success-50: #E6FFEB;
+  --palette-success-100: #CBF7D5;
+  --palette-success-200: #AEE6BB;
+  --palette-success-300: #8ED09E;
+  --palette-success-400: #6BB880;
+  --palette-success-500: #449D60;
+  --palette-success-600: #06813F;
+  --palette-success-700: #00662F;
+  --palette-success-800: #004F23;
+  --palette-success-900: #003A17;
+  --palette-success-950: #00260C;
+  --palette-warning-50: #FFF5F0;
+  --palette-warning-100: #FFE5D8;
+  --palette-warning-200: #FFCBB0;
+  --palette-warning-300: #F8AE86;
+  --palette-warning-400: #E49164;
+  --palette-warning-500: #CD733F;
+  --palette-warning-600: #B45309;
+  --palette-warning-700: #8F3E00;
+  --palette-warning-800: #6F2E00;
+  --palette-warning-900: #511F00;
+  --palette-warning-950: #361100;
+  --palette-danger-50: #FFF5F3;
+  --palette-danger-100: #FFE3DF;
+  --palette-danger-200: #FFC7C0;
+  --palette-danger-300: #FFA399;
+  --palette-danger-400: #F87A6F;
+  --palette-danger-500: #E1564D;
+  --palette-danger-600: #C62828;
+  --palette-danger-700: #A40612;
+  --palette-danger-800: #810009;
+  --palette-danger-900: #600004;
+  --palette-danger-950: #420001;
+  --palette-info-50: #F4F8FF;
+  --palette-info-100: #DEE9FF;
+  --palette-info-200: #BED3FF;
+  --palette-info-300: #96B8FF;
+  --palette-info-400: #6A98FF;
+  --palette-info-500: #4174F2;
+  --palette-info-600: #1D4ED8;
+  --palette-info-700: #0F39B9;
+  --palette-info-800: #05279C;
+  --palette-info-900: #011680;
+  --palette-info-950: #000466;
+
+  /* ---- Typography ---- */
+  --font-sans: 'Geist', 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, 'SF Mono', 'Roboto Mono', monospace;
+  --font-size-display-lg: clamp(2.25rem, 1.6rem + 2.4vw, 3.25rem);
+  --line-height-display-lg: 1.06;
+  --tracking-display-lg: -0.03em;
+  --font-weight-display-lg: 600;
+  --font-size-display-sm: clamp(1.75rem, 1.4rem + 1.4vw, 2.25rem);
+  --line-height-display-sm: 1.12;
+  --tracking-display-sm: -0.025em;
+  --font-weight-display-sm: 600;
+  --font-size-heading-lg: 1.5rem;
+  --line-height-heading-lg: 1.25;
+  --tracking-heading-lg: -0.02em;
+  --font-weight-heading-lg: 600;
+  --font-size-heading-md: 1.25rem;
+  --line-height-heading-md: 1.3;
+  --tracking-heading-md: -0.015em;
+  --font-weight-heading-md: 600;
+  --font-size-heading-sm: 1.0625rem;
+  --line-height-heading-sm: 1.35;
+  --tracking-heading-sm: -0.01em;
+  --font-weight-heading-sm: 600;
+  --font-size-body-lg: 1rem;
+  --line-height-body-lg: 1.6;
+  --tracking-body-lg: 0;
+  --font-weight-body-lg: 400;
+  --font-size-body-md: 0.9375rem;
+  --line-height-body-md: 1.55;
+  --tracking-body-md: 0;
+  --font-weight-body-md: 400;
+  --font-size-body-sm: 0.875rem;
+  --line-height-body-sm: 1.5;
+  --tracking-body-sm: 0;
+  --font-weight-body-sm: 400;
+  --font-size-caption: 0.8125rem;
+  --line-height-caption: 1.45;
+  --tracking-caption: 0.005em;
+  --font-weight-caption: 400;
+  --font-size-overline: 0.6875rem;
+  --line-height-overline: 1.4;
+  --tracking-overline: 0.08em;
+  --font-weight-overline: 600;
+  --font-size-numeric: 1.75rem;
+  --line-height-numeric: 1.15;
+  --tracking-numeric: -0.02em;
+  --font-weight-numeric: 600;
+
+  /* ---- Space, radius, elevation, motion ---- */
+  --space-0: 0;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-7: 1.75rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --space-20: 5rem;
+  --space-24: 6rem;
+  --space-32: 8rem;
+  --space-px: 1px;
+  --space-0_5: 0.125rem;
+  --space-1_5: 0.375rem;
+  --space-2_5: 0.625rem;
+  --radius-none: 0;
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 20px;
+  --radius-3xl: 28px;
+  --radius-full: 9999px;
+  --shadow-none: none;
+  --shadow-xs: 0 1px 2px 0 rgba(11, 26, 18, 0.05);
+  --shadow-sm: 0 1px 3px 0 rgba(11, 26, 18, 0.07), 0 1px 2px -1px rgba(11, 26, 18, 0.06);
+  --shadow-md: 0 4px 12px -2px rgba(11, 26, 18, 0.08), 0 2px 4px -2px rgba(11, 26, 18, 0.05);
+  --shadow-lg: 0 12px 28px -6px rgba(11, 26, 18, 0.12), 0 4px 10px -4px rgba(11, 26, 18, 0.06);
+  --shadow-xl: 0 24px 48px -12px rgba(11, 26, 18, 0.18);
+  --shadow-focus: 0 0 0 3px rgba(0, 102, 52, 0.28);
+  --duration-instant: 80ms;
+  --duration-fast: 140ms;
+  --duration-normal: 220ms;
+  --duration-slow: 340ms;
+  --duration-deliberate: 520ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-entrance: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --ease-exit: cubic-bezier(0.3, 0, 0.8, 0.15);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --z-base: 0;
+  --z-raised: 10;
+  --z-sticky: 100;
+  --z-header: 200;
+  --z-drawer: 300;
+  --z-overlay: 400;
+  --z-modal: 500;
+  --z-popover: 600;
+  --z-toast: 700;
+  --z-tooltip: 800;
+
+  /* ---- Semantic roles: light ---- */
+  --color-bg-canvas: #F7F8F7;
+  --color-bg-surface: #FFFFFF;
+  --color-bg-subtle: #F2F5F2;
+  --color-bg-hover: #F2F5F2;
+  --color-bg-primary: #006634;
+  --color-bg-primary-hover: #005329;
+  --color-bg-primary-subtle: #E7FFED;
+  --color-bg-accent: #FCCF02;
+  --color-bg-accent-subtle: #FFF2C7;
+  --color-bg-success-subtle: #E6FFEB;
+  --color-bg-warning-subtle: #FFF5F0;
+  --color-bg-danger-subtle: #FFF5F3;
+  --color-bg-info-subtle: #F4F8FF;
+  --color-bg-success: #00662F;
+  --color-bg-warning: #8F3E00;
+  --color-bg-danger: #C62828;
+  --color-bg-info: #1D4ED8;
+  --color-text-primary: #161A17;
+  --color-text-muted: #6A6F6B;
+  --color-text-subtle: #9C9F9D;
+  --color-text-on-primary: #FFFFFF;
+  --color-text-on-accent: #161A17;
+  --color-text-brand: #006634;
+  --color-text-success: #00662F;
+  --color-text-warning: #8F3E00;
+  --color-text-danger: #A40612;
+  --color-text-info: #0F39B9;
+  --color-border-subtle: #E4E7E5;
+  --color-border-default: #D3D6D4;
+  --color-border-strong: #6A6F6B;
+  --color-border-primary: #006634;
+  --color-ring-focus: #006634;
+
+  color-scheme: light;
+}
+
+/* Respect the OS preference by default... */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg-canvas: #161A17;
+    --color-bg-surface: #1D231F;
+    --color-bg-subtle: #252C27;
+    --color-bg-hover: #2C342E;
+    --color-bg-primary: #8CC39C;
+    --color-bg-primary-hover: #AFDEBB;
+    --color-bg-primary-subtle: rgba(0, 102, 52, 0.24);
+    --color-bg-accent: #FCCF02;
+    --color-bg-accent-subtle: rgba(252, 207, 2, 0.16);
+    --color-bg-success-subtle: rgba(6, 129, 63, 0.20);
+    --color-bg-warning-subtle: rgba(180, 83, 9, 0.22);
+    --color-bg-danger-subtle: rgba(198, 40, 40, 0.22);
+    --color-bg-info-subtle: rgba(29, 78, 216, 0.24);
+    --color-bg-success: #8ED09E;
+    --color-bg-warning: #F8AE86;
+    --color-bg-danger: #FFA399;
+    --color-bg-info: #96B8FF;
+    --color-text-primary: #F2F5F2;
+    --color-text-muted: #BCBFBD;
+    --color-text-subtle: #9C9F9D;
+    --color-text-on-primary: #161A17;
+    --color-text-on-accent: #161A17;
+    --color-text-brand: #8CC39C;
+    --color-text-success: #8ED09E;
+    --color-text-warning: #F8AE86;
+    --color-text-danger: #FFA399;
+    --color-text-info: #96B8FF;
+    --color-border-subtle: rgba(255, 255, 255, 0.08);
+    --color-border-default: rgba(255, 255, 255, 0.14);
+    --color-border-strong: #9C9F9D;
+    --color-border-primary: #8CC39C;
+    --color-ring-focus: #8CC39C;
+    color-scheme: dark;
+  }
+}
+
+/* ...but an explicit in-app choice always wins, in both directions. */
+:root[data-theme='dark'] {
+  --color-bg-canvas: #161A17;
+  --color-bg-surface: #1D231F;
+  --color-bg-subtle: #252C27;
+  --color-bg-hover: #2C342E;
+  --color-bg-primary: #8CC39C;
+  --color-bg-primary-hover: #AFDEBB;
+  --color-bg-primary-subtle: rgba(0, 102, 52, 0.24);
+  --color-bg-accent: #FCCF02;
+  --color-bg-accent-subtle: rgba(252, 207, 2, 0.16);
+  --color-bg-success-subtle: rgba(6, 129, 63, 0.20);
+  --color-bg-warning-subtle: rgba(180, 83, 9, 0.22);
+  --color-bg-danger-subtle: rgba(198, 40, 40, 0.22);
+  --color-bg-info-subtle: rgba(29, 78, 216, 0.24);
+  --color-bg-success: #8ED09E;
+  --color-bg-warning: #F8AE86;
+  --color-bg-danger: #FFA399;
+  --color-bg-info: #96B8FF;
+  --color-text-primary: #F2F5F2;
+  --color-text-muted: #BCBFBD;
+  --color-text-subtle: #9C9F9D;
+  --color-text-on-primary: #161A17;
+  --color-text-on-accent: #161A17;
+  --color-text-brand: #8CC39C;
+  --color-text-success: #8ED09E;
+  --color-text-warning: #F8AE86;
+  --color-text-danger: #FFA399;
+  --color-text-info: #96B8FF;
+  --color-border-subtle: rgba(255, 255, 255, 0.08);
+  --color-border-default: rgba(255, 255, 255, 0.14);
+  --color-border-strong: #9C9F9D;
+  --color-border-primary: #8CC39C;
+  --color-ring-focus: #8CC39C;
+  color-scheme: dark;
+}
+
+:root[data-theme='light'] {
+  --color-bg-canvas: #F7F8F7;
+  --color-bg-surface: #FFFFFF;
+  --color-bg-subtle: #F2F5F2;
+  --color-bg-hover: #F2F5F2;
+  --color-bg-primary: #006634;
+  --color-bg-primary-hover: #005329;
+  --color-bg-primary-subtle: #E7FFED;
+  --color-bg-accent: #FCCF02;
+  --color-bg-accent-subtle: #FFF2C7;
+  --color-bg-success-subtle: #E6FFEB;
+  --color-bg-warning-subtle: #FFF5F0;
+  --color-bg-danger-subtle: #FFF5F3;
+  --color-bg-info-subtle: #F4F8FF;
+  --color-bg-success: #00662F;
+  --color-bg-warning: #8F3E00;
+  --color-bg-danger: #C62828;
+  --color-bg-info: #1D4ED8;
+  --color-text-primary: #161A17;
+  --color-text-muted: #6A6F6B;
+  --color-text-subtle: #9C9F9D;
+  --color-text-on-primary: #FFFFFF;
+  --color-text-on-accent: #161A17;
+  --color-text-brand: #006634;
+  --color-text-success: #00662F;
+  --color-text-warning: #8F3E00;
+  --color-text-danger: #A40612;
+  --color-text-info: #0F39B9;
+  --color-border-subtle: #E4E7E5;
+  --color-border-default: #D3D6D4;
+  --color-border-strong: #6A6F6B;
+  --color-border-primary: #006634;
+  --color-ring-focus: #006634;
+  color-scheme: light;
+}
+
+/* Users who ask for less motion get none of the decorative kind. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
