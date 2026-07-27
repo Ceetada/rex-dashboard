@@ -1,0 +1,848 @@
+<title>Evas — design system & UI preview</title>
+
+<style>/*__TAILWIND__*/</style>
+
+<style>
+  /* ── Page chrome ──────────────────────────────────────────────────────────
+     The preview shell is styled with the same semantic tokens as the product,
+     so the page and the screens it shows respond to the theme together. */
+  :root {
+    --shell-max: 1180px;
+    --rule: var(--color-border-subtle);
+  }
+
+  body {
+    background: var(--color-bg-canvas);
+    color: var(--color-text-primary);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    margin: 0;
+  }
+
+  .shell {
+    max-width: var(--shell-max);
+    margin: 0 auto;
+    padding: 0 1.25rem 6rem;
+  }
+
+  /* Sections are separated by rules rather than by shadow — the product does
+     the same, and it keeps the page quiet enough for the screens to carry it. */
+  .band {
+    padding: 4.5rem 0;
+    border-top: 1px solid var(--rule);
+  }
+  .band:first-of-type { border-top: 0; }
+
+  .eyebrow {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--color-text-brand);
+    margin: 0 0 0.875rem;
+  }
+
+  h1, h2, h3 { text-wrap: balance; margin: 0; }
+
+  h1 {
+    font-size: clamp(2.25rem, 1.5rem + 3vw, 3.5rem);
+    line-height: 1.04;
+    letter-spacing: -0.035em;
+    font-weight: 600;
+  }
+
+  h2 {
+    font-size: clamp(1.5rem, 1.2rem + 1.1vw, 2rem);
+    line-height: 1.15;
+    letter-spacing: -0.025em;
+    font-weight: 600;
+  }
+
+  h3 { font-size: 1.0625rem; line-height: 1.35; letter-spacing: -0.01em; font-weight: 600; }
+
+  .lede {
+    font-size: 1.0625rem;
+    line-height: 1.65;
+    color: var(--color-text-muted);
+    max-width: 62ch;
+    margin: 1.25rem 0 0;
+  }
+
+  .prose { max-width: 66ch; }
+  .prose p { line-height: 1.68; color: var(--color-text-muted); margin: 1rem 0 0; }
+  .prose p strong { color: var(--color-text-primary); font-weight: 600; }
+  .prose code {
+    font-family: var(--font-mono);
+    font-size: 0.875em;
+    background: var(--color-bg-subtle);
+    padding: 0.1em 0.4em;
+    border-radius: 4px;
+  }
+
+  .note {
+    font-size: 0.8125rem;
+    line-height: 1.55;
+    color: var(--color-text-muted);
+    margin: 0;
+  }
+
+  /* ── Derivation strip ──────────────────────────────────────────────────── */
+  .seeds { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+  .seed {
+    border: 1px solid var(--rule);
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--color-bg-surface);
+  }
+  .seed .chip { height: 92px; }
+  .seed .meta { padding: 0.875rem 1rem 1rem; }
+  .seed .hex {
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-text-primary);
+  }
+  .seed .role { font-size: 0.8125rem; color: var(--color-text-muted); margin-top: 0.2rem; }
+
+  /* Ramps: the anchor stop is outlined, because that stop IS the logo colour. */
+  .ramp { display: flex; border-radius: 10px; overflow: hidden; border: 1px solid var(--rule); }
+  .ramp > div { flex: 1; height: 56px; position: relative; }
+  .ramp > div[data-anchor] { flex: 1.9; }
+  .ramp > div[data-anchor]::after {
+    content: attr(data-anchor);
+    position: absolute;
+    inset: auto 0 6px;
+    text-align: center;
+    font-family: var(--font-mono);
+    font-size: 0.625rem;
+    letter-spacing: 0.04em;
+    color: #fff;
+  }
+  .ramp-row { display: grid; gap: 0.5rem; margin-top: 1.75rem; }
+  .ramp-label {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-size: 0.8125rem; color: var(--color-text-muted);
+  }
+  .ramp-label b { color: var(--color-text-primary); font-weight: 600; }
+
+  /* ── Contrast table ───────────────────────────────────────────────────── */
+  .table-wrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 12px; background: var(--color-bg-surface); }
+  table { width: 100%; border-collapse: collapse; font-size: 0.875rem; min-width: 520px; }
+  th {
+    text-align: left; font-size: 0.6875rem; text-transform: uppercase;
+    letter-spacing: 0.07em; color: var(--color-text-muted); font-weight: 600;
+    padding: 0.875rem 1rem; border-bottom: 1px solid var(--rule);
+  }
+  td { padding: 0.8125rem 1rem; border-bottom: 1px solid var(--rule); color: var(--color-text-primary); }
+  tr:last-child td { border-bottom: 0; }
+  td.num { font-variant-numeric: tabular-nums; font-family: var(--font-mono); text-align: right; white-space: nowrap; }
+  .verdict {
+    display: inline-flex; align-items: center; gap: 0.375rem;
+    font-size: 0.75rem; font-weight: 600; padding: 0.15rem 0.5rem; border-radius: 999px;
+  }
+  .verdict.pass { background: var(--color-bg-success-subtle); color: var(--color-text-success); }
+  .verdict.fail { background: var(--color-bg-danger-subtle); color: var(--color-text-danger); }
+
+  /* ── Phone frames ─────────────────────────────────────────────────────────
+     360px is the smallest common Android viewport in Nigeria, and the width
+     the layouts were designed against. */
+  .screens { display: grid; gap: 3rem; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); align-items: start; }
+  .screen { display: grid; gap: 1rem; }
+  .phone {
+    width: 360px; max-width: 100%;
+    border: 1px solid var(--color-border-default);
+    border-radius: 24px;
+    background: var(--color-bg-canvas);
+    overflow: hidden;
+    box-shadow: var(--shadow-lg);
+  }
+  .phone-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.5rem 1rem 0.25rem;
+    font-size: 0.6875rem; font-variant-numeric: tabular-nums;
+    color: var(--color-text-muted);
+  }
+  .phone-body { max-height: 620px; overflow-y: auto; }
+  .screen-note { font-size: 0.875rem; line-height: 1.6; color: var(--color-text-muted); max-width: 46ch; }
+  .screen-note b { color: var(--color-text-primary); font-weight: 600; }
+
+  /* ── Specimens ────────────────────────────────────────────────────────── */
+  .specimens { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+  .specimen {
+    border: 1px solid var(--rule); border-radius: 12px;
+    background: var(--color-bg-surface); padding: 1.25rem;
+    display: grid; gap: 0.875rem; align-content: start;
+  }
+  .specimen h3 { font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--color-text-muted); }
+  .specimen-row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+
+  .callout {
+    border-left: 2px solid var(--color-border-primary);
+    padding-left: 1.125rem;
+    margin-top: 2rem;
+  }
+
+  footer { border-top: 1px solid var(--rule); padding: 3rem 0 0; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  }
+</style>
+
+<div class="shell">
+
+  <!-- ── Masthead ─────────────────────────────────────────────────────── -->
+  <header class="band">
+    <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:2.25rem;">
+      <span style="position:relative;font-size:1.5rem;font-weight:700;letter-spacing:-0.03em;color:var(--color-text-brand);">ev<span style="position:relative;">a<span style="position:absolute;right:-2px;top:-5px;width:9px;height:9px;transform:rotate(45deg);border-radius:1px;background:var(--palette-gold-400);"></span></span>s</span>
+    </div>
+
+    <p class="eyebrow">Design system &amp; UI preview</p>
+    <h1>A colour system that could only have come from this logo.</h1>
+    <p class="lede">
+      Three colours account for roughly 78% of the supplied artwork. Every ramp, token
+      and screen below descends from them — generated in OKLCH, contrast-gated in CI,
+      and pinned so the brand green and gold reach the interface byte-for-byte.
+    </p>
+
+    <div class="callout">
+      <p class="note">
+        <strong style="color:var(--color-text-primary);">This is a static render, not the running app.</strong>
+        The live product needs PostgreSQL and the NestJS API behind it. Everything here is
+        built from the real components — the same Tailwind classes, compiled from the same
+        source — with seeded data standing in for live responses. Use the theme toggle;
+        both themes are designed, not inverted.
+      </p>
+    </div>
+  </header>
+
+  <!-- ── Derivation ───────────────────────────────────────────────────── -->
+  <section class="band">
+    <p class="eyebrow">Where the palette came from</p>
+    <h2>Sampled, not chosen</h2>
+    <p class="lede">
+      Counting pixels in the logo returns the wordmark green, the diamond gold, and the
+      paper beneath them. Two of those three decided the system's structure on their own.
+    </p>
+
+    <div class="seeds" style="margin-top:2.5rem;">
+      <div class="seed">
+        <div class="chip" style="background:#006634;"></div>
+        <div class="meta">
+          <div class="hex">#006634</div>
+          <div class="role">Wordmark green · 32.5% of pixels</div>
+        </div>
+      </div>
+      <div class="seed">
+        <div class="chip" style="background:#FCCF02;"></div>
+        <div class="meta">
+          <div class="hex">#FCCF02</div>
+          <div class="role">Diamond gold · 3.5% of pixels</div>
+        </div>
+      </div>
+      <div class="seed">
+        <div class="chip" style="background:#F7F7F7;border-bottom:1px solid var(--rule);"></div>
+        <div class="meta">
+          <div class="hex">#F7F7F7</div>
+          <div class="role">Ground · 42.2% of pixels</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="prose" style="margin-top:2.5rem;">
+      <p>
+        <strong>The green is dark enough to be a primary action colour.</strong> At 7.12:1 on
+        white it clears AA for body text and AAA for large — so it works as a button fill, a
+        link and a focus ring with no invented darker variant. Many brand greens don't.
+      </p>
+      <p>
+        <strong>The gold is too light to ever carry white text</strong> — 1.49:1, nowhere near
+        the 4.5:1 floor. That single fact demotes it from second primary to accent, and the
+        system enforces it: <code>text-on-accent</code> is always ink, and a test asserts the
+        white-on-gold failure explicitly so nobody re-derives it in six months.
+      </p>
+      <p>
+        Gold is also <em>rationed</em>. It's 3.5% of the logo, and it's roughly that in the UI —
+        one accent element per screen. Below, it appears exactly twice.
+      </p>
+    </div>
+
+    <div class="ramp-row" style="margin-top:3rem;">
+      <div class="ramp-label"><span><b>Green</b> — primary</span><span>600 is the logo, exactly</span></div>
+      <div class="ramp">
+        <div style="background:#E7FFED"></div><div style="background:#CEF3D7"></div>
+        <div style="background:#AFDEBB"></div><div style="background:#8CC39C"></div>
+        <div style="background:#67A67A"></div><div style="background:#3E8758"></div>
+        <div style="background:#006634" data-anchor="#006634"></div>
+        <div style="background:#005329"></div><div style="background:#00431F"></div>
+        <div style="background:#003417"></div><div style="background:#00260E"></div>
+      </div>
+    </div>
+
+    <div class="ramp-row">
+      <div class="ramp-label"><span><b>Gold</b> — accent</span><span>400 is the logo, exactly</span></div>
+      <div class="ramp">
+        <div style="background:#FFF7DF"></div><div style="background:#FFF2C7"></div>
+        <div style="background:#FFE89F"></div><div style="background:#FFDD68"></div>
+        <div style="background:#FCCF02" data-anchor="#FCCF02"><span style="position:absolute;inset:auto 0 6px;text-align:center;font-family:var(--font-mono);font-size:0.625rem;color:#161A17;">#FCCF02</span></div>
+        <div style="background:#D2AC00"></div><div style="background:#AD8D00"></div>
+        <div style="background:#8B7100"></div><div style="background:#6B5700"></div>
+        <div style="background:#4E3E00"></div><div style="background:#332800"></div>
+      </div>
+    </div>
+
+    <div class="ramp-row">
+      <div class="ramp-label"><span><b>Neutral</b></span><span>carries a trace of the brand hue</span></div>
+      <div class="ramp">
+        <div style="background:#F8FBF9"></div><div style="background:#F2F5F2"></div>
+        <div style="background:#E4E7E5"></div><div style="background:#D3D6D4"></div>
+        <div style="background:#BCBFBD"></div><div style="background:#9C9F9D"></div>
+        <div style="background:#6A6F6B"></div><div style="background:#555A56"></div>
+        <div style="background:#424643"></div><div style="background:#2E322F"></div>
+        <div style="background:#161A17"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Contrast gate ────────────────────────────────────────────────── -->
+  <section class="band">
+    <p class="eyebrow">Accessibility is a build gate</p>
+    <h2>45 pairings, asserted on every commit</h2>
+    <p class="lede">
+      Not a spot check — every foreground/background combination the system actually ships,
+      in both themes, with translucent dark-theme tints flattened over their real backdrop
+      before measurement. A sample:
+    </p>
+
+    <div class="table-wrap" style="margin-top:2rem;">
+      <table>
+        <thead>
+          <tr><th>Pairing</th><th style="text-align:right;">Ratio</th><th style="width:1%;"></th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Primary button — white on green-600</td><td class="num">7.12:1</td><td><span class="verdict pass">Pass</span></td></tr>
+          <tr><td>Link — green-600 on white</td><td class="num">7.12:1</td><td><span class="verdict pass">Pass</span></td></tr>
+          <tr><td>Accent chip — ink on gold-400</td><td class="num">11.78:1</td><td><span class="verdict pass">Pass</span></td></tr>
+          <tr><td>Muted text — neutral-600 on subtle surface</td><td class="num">4.66:1</td><td><span class="verdict pass">Pass</span></td></tr>
+          <tr><td>Body — ink on canvas</td><td class="num">16.52:1</td><td><span class="verdict pass">Pass</span></td></tr>
+          <tr><td>Dark — green-300 on surface</td><td class="num">7.93:1</td><td><span class="verdict pass">Pass</span></td></tr>
+          <tr><td>Dark — gold-400 on surface</td><td class="num">10.72:1</td><td><span class="verdict pass">Pass</span></td></tr>
+          <tr><td>Dark — body on canvas</td><td class="num">16.01:1</td><td><span class="verdict pass">Pass</span></td></tr>
+          <tr>
+            <td style="color:var(--color-text-muted);">White on gold-400 — <em>asserted to fail</em></td>
+            <td class="num" style="color:var(--color-text-muted);">1.49:1</td>
+            <td><span class="verdict fail">By design</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="prose" style="margin-top:2rem;">
+      <p>
+        The last row is a test that asserts a <em>failure</em>. It exists so the reason
+        <code>text-on-accent</code> is ink stays documented in code rather than in someone's memory.
+      </p>
+      <p>
+        The gate caught two real problems during construction. Muted text had been tuned against
+        white, where it reads 4.63:1 and looks fine — but it never sits on white in the product,
+        it sits on the canvas and on inset panels, where that same value dropped to 4.21:1.
+        And the first semantic <strong>success</strong> green landed close enough to the brand
+        green that a "succeeded" badge read as a <em>branded</em> badge. Both were fixed before
+        a single component existed.
+      </p>
+    </div>
+  </section>
+
+  <!-- ── Screens ──────────────────────────────────────────────────────── -->
+  <section class="band">
+    <p class="eyebrow">The product</p>
+    <h2>Four screens at 360&nbsp;px</h2>
+    <p class="lede">
+      The smallest common Android viewport in Nigeria, and the width these layouts were
+      designed against rather than shrunk down to.
+    </p>
+
+    <div class="screens" style="margin-top:3rem;">
+
+      <!-- Dashboard -->
+      <div class="screen">
+        <h3>Dashboard</h3>
+        <div class="phone">
+          <div class="phone-bar"><span>09:41</span><span>▮▮▮ ⌁</span></div>
+          <div class="phone-body">
+            <div class="flex h-14 items-center justify-between border-b border-line-subtle bg-surface px-4">
+              <span class="relative text-[1.375rem] font-bold lowercase leading-none tracking-tight text-content-brand">ev<span class="relative">a<span class="absolute -right-0.5 -top-1 size-2 rotate-45 rounded-[1px] bg-[var(--palette-gold-400)]"></span></span>s</span>
+              <span class="relative flex size-9 items-center justify-center rounded-md text-content-muted">
+                <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                <span class="absolute right-1.5 top-1.5 size-2 rounded-full bg-[var(--color-bg-danger)] ring-2 ring-[var(--color-bg-surface)]"></span>
+              </span>
+            </div>
+
+            <div class="flex flex-col gap-6 px-4 py-5">
+              <div class="flex flex-col gap-1">
+                <p class="text-body-sm text-content-muted">Good morning,</p>
+                <h1 class="text-display-sm text-content">Chidinma</h1>
+              </div>
+
+              <!-- Balance card: the one place green-600 fills a large area -->
+              <div class="relative overflow-hidden rounded-2xl bg-[var(--palette-green-600)] p-6 text-white shadow-lg">
+                <div class="pointer-events-none absolute -right-12 -top-16 h-56 w-56 rotate-45 rounded-3xl bg-[var(--palette-gold-400)] opacity-[0.12]"></div>
+                <div class="pointer-events-none absolute -bottom-24 -left-10 h-48 w-48 rotate-45 rounded-3xl bg-white opacity-[0.05]"></div>
+                <div class="relative flex items-start justify-between gap-4">
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <p class="text-overline uppercase text-white/70">Wallet balance</p>
+                      <svg class="size-3.5 text-white/70" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </div>
+                    <p class="mt-1.5 truncate text-[1.875rem] font-semibold leading-tight tracking-tight tabular-nums">₦124,500.00</p>
+                    <p class="mt-1 text-body-sm text-white/70 tabular-nums">₦2,000.00 pending</p>
+                  </div>
+                  <span class="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-sm bg-accent px-3 text-body-sm font-medium text-accent-fg shadow-sm">
+                    <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5v14"/></svg>Top up
+                  </span>
+                </div>
+              </div>
+
+              <!-- Setup: one next action, not a checklist -->
+              <div class="flex flex-col gap-4 rounded-2xl border border-line-subtle bg-surface p-5">
+                <div class="flex items-start gap-4">
+                  <div class="relative shrink-0">
+                    <svg width="64" height="64" viewBox="0 0 64 64">
+                      <circle cx="32" cy="32" r="26" fill="none" stroke-width="5" class="stroke-[var(--color-bg-subtle)]"/>
+                      <circle cx="32" cy="32" r="26" fill="none" stroke-width="5" stroke-linecap="round"
+                              stroke-dasharray="163.36" stroke-dashoffset="40.84" transform="rotate(-90 32 32)"
+                              class="stroke-[var(--color-bg-primary)]"/>
+                    </svg>
+                    <span class="absolute inset-0 flex items-center justify-center text-body-sm font-semibold text-content tabular-nums">75%</span>
+                  </div>
+                  <div class="min-w-0">
+                    <h3 class="text-heading-sm text-content">Account setup</h3>
+                    <p class="mt-0.5 text-body-sm text-content-muted">Finish setting up to raise your limits.</p>
+                  </div>
+                </div>
+                <span class="inline-flex h-9 w-full items-center justify-center gap-2 rounded-sm border border-line bg-surface px-3 text-body-sm font-medium text-content shadow-xs">
+                  Turn on two-factor authentication
+                  <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                </span>
+              </div>
+
+              <div class="flex flex-col gap-4">
+                <h2 class="text-heading-md text-content">What would you like to do?</h2>
+                <div class="grid grid-cols-1 gap-4">
+                  <div class="group relative flex flex-col gap-3 rounded-xl border border-line-subtle bg-surface p-5">
+                    <span class="flex size-11 items-center justify-center rounded-lg bg-primary-subtle text-content-brand">
+                      <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+                    </span>
+                    <div class="flex flex-col gap-1">
+                      <h3 class="text-heading-sm text-content">Health plans</h3>
+                      <p class="text-body-sm text-content-muted">Manage your HMO cover, dependants and hospital network</p>
+                    </div>
+                    <p class="mt-auto pt-1 text-caption font-medium text-content-brand">Family HMO · renews in 24 days</p>
+                  </div>
+                  <div class="group relative flex flex-col gap-3 rounded-xl border border-line-subtle bg-surface p-5">
+                    <span class="flex size-11 items-center justify-center rounded-lg bg-primary-subtle text-content-brand">
+                      <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 5c-1.5 0-2.8 1.4-3 2-3.5-1.5-11-.3-11 5 0 1.8 0 3 2 4.5V20h4v-2h3v2h4v-4c1-.5 1.7-1 2-2h2v-4h-2c0-1-.5-1.5-1-2V5Z"/></svg>
+                    </span>
+                    <div class="flex flex-col gap-1">
+                      <h3 class="text-heading-sm text-content">Retirement</h3>
+                      <p class="text-body-sm text-content-muted">Track your savings, contributions and pension benefits</p>
+                    </div>
+                    <p class="mt-auto pt-1 text-caption font-medium text-content-brand">₦1,240,000.00 saved</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="flex flex-col gap-4">
+                <h2 class="text-heading-md text-content">Recent activity</h2>
+                <ul class="divide-y divide-[var(--color-border-subtle)] overflow-hidden rounded-xl border border-line-subtle bg-surface">
+                  <li class="flex items-center gap-3 p-4">
+                    <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-subtle text-content-muted">
+                      <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17 17 7M7 7h10v10"/></svg>
+                    </span>
+                    <div class="min-w-0 flex-1">
+                      <p class="truncate text-body-sm font-medium text-content">MTN airtime for 0803•••4567</p>
+                      <p class="truncate text-caption text-content-muted">2 hours ago · <span class="font-mono">EVS-8F3K2M9Q</span></p>
+                    </div>
+                    <div class="flex shrink-0 flex-col items-end gap-1">
+                      <span class="text-body-sm font-semibold text-content tabular-nums">−₦500.00</span>
+                      <span class="inline-flex items-center gap-1.5 rounded-full bg-success-subtle px-2.5 py-0.5 text-caption font-medium text-success-fg">Successful</span>
+                    </div>
+                  </li>
+                  <li class="flex items-center gap-3 p-4">
+                    <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-subtle text-content-muted">
+                      <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 7 7 17M17 17H7V7"/></svg>
+                    </span>
+                    <div class="min-w-0 flex-1">
+                      <p class="truncate text-body-sm font-medium text-content">Wallet funding</p>
+                      <p class="truncate text-caption text-content-muted">Yesterday · <span class="font-mono">EVS-2M9QK4LP</span></p>
+                    </div>
+                    <div class="flex shrink-0 flex-col items-end gap-1">
+                      <span class="text-body-sm font-semibold text-content tabular-nums">+₦50,000.00</span>
+                      <span class="inline-flex items-center gap-1.5 rounded-full bg-success-subtle px-2.5 py-0.5 text-caption font-medium text-success-fg">Successful</span>
+                    </div>
+                  </li>
+                  <li class="flex items-center gap-3 p-4">
+                    <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-subtle text-content-muted">
+                      <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17 17 7M7 7h10v10"/></svg>
+                    </span>
+                    <div class="min-w-0 flex-1">
+                      <p class="truncate text-body-sm font-medium text-content">DStv Compact · 1234•••789</p>
+                      <p class="truncate text-caption text-content-muted">3 days ago · <span class="font-mono">EVS-K4LP7Q2M</span></p>
+                    </div>
+                    <div class="flex shrink-0 flex-col items-end gap-1">
+                      <span class="text-body-sm font-semibold text-content tabular-nums">−₦19,000.00</span>
+                      <span class="inline-flex items-center gap-1.5 rounded-full bg-info-subtle px-2.5 py-0.5 text-caption font-medium text-info-fg">Confirming</span>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            <nav class="flex border-t border-line-subtle bg-surface">
+              <span class="flex flex-1 flex-col items-center gap-1 py-2.5 text-[0.6875rem] font-medium text-content-brand">
+                <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>Dashboard
+              </span>
+              <span class="flex flex-1 flex-col items-center gap-1 py-2.5 text-[0.6875rem] font-medium text-content-muted">
+                <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>Health
+              </span>
+              <span class="flex flex-1 flex-col items-center gap-1 py-2.5 text-[0.6875rem] font-medium text-content-muted">
+                <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9 10h6"/></svg>Retirement
+              </span>
+              <span class="flex flex-1 flex-col items-center gap-1 py-2.5 text-[0.6875rem] font-medium text-content-muted">
+                <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg>Services
+              </span>
+              <span class="flex flex-1 flex-col items-center gap-1 py-2.5 text-[0.6875rem] font-medium text-content-muted">
+                <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15H4a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 6 9.4"/></svg>Settings
+              </span>
+            </nav>
+          </div>
+        </div>
+        <p class="screen-note">
+          Ordering is a hierarchy, not a list of available widgets. <b>Nothing may push the
+          balance below the fold at 360×640</b> — it's the number people open the app to check.
+          Verification is one next action with visible progress; a six-item checklist gets dismissed.
+          The gold appears once, on Top&nbsp;up.
+        </p>
+      </div>
+
+      <!-- Buy airtime -->
+      <div class="screen">
+        <h3>Buy airtime</h3>
+        <div class="phone">
+          <div class="phone-bar"><span>09:41</span><span>▮▮▮ ⌁</span></div>
+          <div class="phone-body">
+            <div class="flex flex-col gap-6 px-4 py-6">
+              <div class="flex flex-col gap-1">
+                <h1 class="text-display-sm text-content">Buy airtime</h1>
+                <p class="text-body-md text-content-muted">Top up any Nigerian number in seconds.</p>
+              </div>
+
+              <div class="flex flex-col gap-2">
+                <p class="text-body-sm font-medium text-content">Recent numbers</p>
+                <div class="flex flex-wrap gap-2">
+                  <span class="rounded-full border border-line bg-surface px-3 py-1.5 text-caption text-content"><span class="font-medium">Mum</span><span class="ml-1.5 text-content-muted">0803•••4567</span></span>
+                  <span class="rounded-full border border-line bg-surface px-3 py-1.5 text-caption text-content"><span class="font-medium">Me</span><span class="ml-1.5 text-content-muted">0806•••1122</span></span>
+                </div>
+              </div>
+
+              <div class="flex flex-col gap-1.5">
+                <label class="text-body-sm font-medium text-content">Phone number</label>
+                <div class="relative">
+                  <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-content-muted">
+                    <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92Z"/></svg>
+                  </span>
+                  <input class="h-11 w-full rounded-md border border-line bg-surface pl-9 pr-3 text-body-md text-content placeholder:text-content-muted" value="0803 123 4567" readonly />
+                </div>
+                <p class="text-caption text-content-muted">We accept 0803…, +234803… or 803…</p>
+              </div>
+
+              <fieldset class="flex flex-col gap-2">
+                <legend class="mb-1 text-body-sm font-medium text-content">Network <span class="font-normal text-content-muted">— detected from the number</span></legend>
+                <div class="grid grid-cols-4 gap-2">
+                  <span class="relative flex flex-col items-center gap-2 rounded-lg border-2 border-[var(--color-border-primary)] bg-primary-subtle p-3">
+                    <span class="flex size-10 items-center justify-center rounded-full bg-[#FFCC00] text-caption font-bold text-black">MTN</span>
+                    <span class="text-caption font-medium text-content">MTN</span>
+                    <span class="absolute right-1.5 top-1.5 flex size-4 items-center justify-center rounded-full bg-[var(--color-bg-primary)] text-[var(--color-text-on-primary)]">
+                      <svg class="size-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="m5 12 5 5L20 7"/></svg>
+                    </span>
+                  </span>
+                  <span class="relative flex flex-col items-center gap-2 rounded-lg border-2 border-transparent bg-subtle p-3">
+                    <span class="flex size-10 items-center justify-center rounded-full bg-[#E4002B] text-caption font-bold text-white">Air</span>
+                    <span class="text-caption font-medium text-content">Airtel</span>
+                  </span>
+                  <span class="relative flex flex-col items-center gap-2 rounded-lg border-2 border-transparent bg-subtle p-3">
+                    <span class="flex size-10 items-center justify-center rounded-full bg-[#00A651] text-caption font-bold text-white">Glo</span>
+                    <span class="text-caption font-medium text-content">Glo</span>
+                  </span>
+                  <span class="relative flex flex-col items-center gap-2 rounded-lg border-2 border-transparent bg-subtle p-3">
+                    <span class="flex size-10 items-center justify-center rounded-full bg-[#006F3C] text-caption font-bold text-white">9</span>
+                    <span class="text-caption font-medium text-content">9mobile</span>
+                  </span>
+                </div>
+              </fieldset>
+
+              <div class="grid grid-cols-3 gap-2">
+                <span class="rounded-lg border-2 border-transparent bg-subtle py-2.5 text-center text-body-sm font-medium tabular-nums text-content">₦100</span>
+                <span class="rounded-lg border-2 border-transparent bg-subtle py-2.5 text-center text-body-sm font-medium tabular-nums text-content">₦200</span>
+                <span class="rounded-lg border-2 border-[var(--color-border-primary)] bg-primary-subtle py-2.5 text-center text-body-sm font-medium tabular-nums text-content-brand">₦500</span>
+                <span class="rounded-lg border-2 border-transparent bg-subtle py-2.5 text-center text-body-sm font-medium tabular-nums text-content">₦1,000</span>
+                <span class="rounded-lg border-2 border-transparent bg-subtle py-2.5 text-center text-body-sm font-medium tabular-nums text-content">₦2,000</span>
+                <span class="rounded-lg border-2 border-transparent bg-subtle py-2.5 text-center text-body-sm font-medium tabular-nums text-content">₦5,000</span>
+              </div>
+
+              <span class="inline-flex h-12 w-full items-center justify-center rounded-lg bg-primary px-6 text-body-md font-medium text-primary-fg shadow-xs">Buy ₦500 airtime</span>
+            </div>
+          </div>
+        </div>
+        <p class="screen-note">
+          The idempotency key is generated once when the form mounts and reused across every
+          retry — <b>tapping Buy twice on a flaky connection cannot charge twice</b>. Network is
+          auto-detected but stays overridable, because ported numbers exist. Selection is shown
+          by a checkmark and a ring, never by colour alone.
+        </p>
+      </div>
+
+      <!-- Receipt: the three-state contract -->
+      <div class="screen">
+        <h3>Receipt — the state most products get wrong</h3>
+        <div class="phone">
+          <div class="phone-bar"><span>09:41</span><span>▮▮▮ ⌁</span></div>
+          <div class="phone-body">
+            <div class="flex flex-col gap-5 px-4 py-6">
+              <div class="flex flex-col items-center gap-4 rounded-xl border border-line-subtle bg-surface px-6 py-10 text-center">
+                <span class="flex size-14 items-center justify-center rounded-full bg-success-subtle text-success-fg">
+                  <svg class="size-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+                </span>
+                <div>
+                  <h2 class="text-heading-md text-content">Airtime delivered</h2>
+                  <p class="mx-auto mt-1.5 max-w-sm text-body-sm text-content-muted">The airtime has been credited to the number.</p>
+                </div>
+                <p class="font-mono text-caption text-content-muted">EVS-8F3K2M9Q</p>
+              </div>
+
+              <div class="flex flex-col items-center gap-4 rounded-xl border border-line-subtle bg-surface px-6 py-10 text-center">
+                <span class="flex size-14 items-center justify-center rounded-full bg-info-subtle text-info-fg">
+                  <svg class="size-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+                </span>
+                <div>
+                  <h2 class="text-heading-md text-content">Confirming your purchase</h2>
+                  <p class="mx-auto mt-1.5 max-w-sm text-body-sm text-content-muted">
+                    We are confirming this with the network. If it did not go through, we will
+                    refund your wallet automatically — you do not need to do anything.
+                  </p>
+                </div>
+                <p class="font-mono text-caption text-content-muted">EVS-K4LP7Q2M</p>
+                <div class="mt-2 flex gap-3">
+                  <span class="inline-flex h-9 items-center rounded-sm border border-line bg-surface px-3 text-body-sm font-medium text-content shadow-xs">View history</span>
+                  <span class="inline-flex h-9 items-center rounded-sm bg-primary px-3 text-body-sm font-medium text-primary-fg shadow-xs">Done</span>
+                </div>
+              </div>
+
+              <div class="rounded-lg border border-[var(--color-bg-danger)] bg-danger-subtle p-4">
+                <p class="text-body-sm font-medium text-danger-fg">Your wallet balance is too low for this transaction</p>
+                <p class="mt-1 text-body-sm text-content-brand underline">Top up your wallet</p>
+                <p class="mt-2 font-mono text-caption text-content-muted">Reference: 8f3c-91ab</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="screen-note">
+          A purchase has <b>three</b> outcomes, not two. When the aggregator times out we genuinely
+          don't know whether the airtime landed — so the receipt says so, and promises the refund,
+          instead of showing a green tick the backend can't stand behind. Errors always carry a
+          reference the user can quote to support.
+        </p>
+      </div>
+
+      <!-- Health plans -->
+      <div class="screen">
+        <h3>Health plans</h3>
+        <div class="phone">
+          <div class="phone-bar"><span>09:41</span><span>▮▮▮ ⌁</span></div>
+          <div class="phone-body">
+            <div class="flex flex-col gap-6 px-4 py-6">
+              <div class="flex flex-col gap-1">
+                <h1 class="text-display-sm text-content">Health plans</h1>
+                <p class="text-body-md text-content-muted">Cover for you and the people who depend on you.</p>
+              </div>
+
+              <div class="flex flex-col gap-4">
+                <h2 class="text-heading-md text-content">Your cover</h2>
+                <div class="rounded-xl border border-line-subtle bg-surface shadow-xs">
+                  <div class="flex flex-col gap-1 p-5">
+                    <div class="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 class="text-heading-sm text-content">Family HMO Plan</h3>
+                        <p class="mt-1 font-mono text-caption text-content-muted">Member •••••4821</p>
+                      </div>
+                      <span class="inline-flex items-center rounded-full bg-success-subtle px-2.5 py-0.5 text-caption font-medium text-success-fg">Active</span>
+                    </div>
+                  </div>
+                  <div class="flex flex-col gap-4 p-5 pt-0">
+                    <dl class="grid grid-cols-2 gap-4">
+                      <div>
+                        <dt class="text-overline uppercase text-content-muted">Premium</dt>
+                        <dd class="mt-0.5 text-body-md font-semibold tabular-nums text-content">₦12,000<span class="font-normal text-content-muted">/month</span></dd>
+                      </div>
+                      <div>
+                        <dt class="text-overline uppercase text-content-muted">Renews</dt>
+                        <dd class="mt-0.5 text-body-md font-semibold text-warning-fg">12 August 2026<span class="block text-caption font-normal">in 24 days</span></dd>
+                      </div>
+                    </dl>
+                    <div class="flex items-center gap-2 rounded-lg bg-subtle px-3 py-2.5">
+                      <svg class="size-4 shrink-0 text-content-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg>
+                      <p class="text-body-sm text-content">3 dependants covered<span class="text-content-muted"> — Ada, Chidi, Ngozi</span></p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="flex flex-col gap-4">
+                <h2 class="text-heading-md text-content">Other plans</h2>
+                <div class="flex flex-col rounded-xl border border-line-subtle bg-surface shadow-xs">
+                  <div class="flex flex-col gap-3 p-5">
+                    <div>
+                      <h3 class="text-heading-md text-content">Basic HMO Plan</h3>
+                      <p class="mt-1 text-body-sm text-content-muted">Essential cover for everyday care</p>
+                    </div>
+                    <p class="flex items-baseline gap-1">
+                      <span class="text-numeric tabular-nums text-content">₦3,500</span>
+                      <span class="text-body-sm text-content-muted">/month</span>
+                    </p>
+                    <div class="flex flex-wrap gap-3 text-caption text-content-muted">
+                      <span>340+ hospitals</span><span>₦500,000 annual limit</span>
+                    </div>
+                  </div>
+                  <div class="flex flex-1 flex-col gap-4 p-5 pt-0">
+                    <ul class="flex flex-col gap-2.5">
+                      <li class="flex items-start gap-2.5 text-body-sm"><svg class="mt-0.5 size-4 shrink-0 text-success-fg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 12 5 5L20 7"/></svg><span class="text-content">Outpatient consultations<span class="text-content-muted"> — Unlimited</span></span></li>
+                      <li class="flex items-start gap-2.5 text-body-sm"><svg class="mt-0.5 size-4 shrink-0 text-success-fg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 12 5 5L20 7"/></svg><span class="text-content">Prescribed medication<span class="text-content-muted"> — ₦50,000 per year</span></span></li>
+                      <li class="flex items-start gap-2.5 text-body-sm"><svg class="mt-0.5 size-4 shrink-0 text-success-fg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 12 5 5L20 7"/></svg><span class="text-content">Emergency care<span class="text-content-muted"> — ₦100,000 per year</span></span></li>
+                      <li class="flex items-start gap-2.5 text-body-sm text-content-muted"><svg class="mt-0.5 size-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/></svg><span>Specialist consultations</span></li>
+                      <li class="flex items-start gap-2.5 text-body-sm text-content-muted"><svg class="mt-0.5 size-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/></svg><span>Dental care</span></li>
+                      <li class="flex items-start gap-2.5 text-body-sm text-content-muted"><svg class="mt-0.5 size-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/></svg><span>Optical care</span></li>
+                    </ul>
+                    <div class="mt-auto pt-2">
+                      <span class="inline-flex h-11 w-full items-center justify-center rounded-md border border-line bg-surface px-4 text-body-sm font-medium text-content shadow-xs">Choose Basic HMO Plan</span>
+                      <p class="mt-2 text-center text-caption text-content-muted">30-day waiting period applies</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="screen-note">
+          <b>Exclusions are on the card, not behind a link.</b> Discovering one at a hospital
+          counter is the worst failure this product could produce. Benefits are database rows —
+          nothing branches on plan tier — so a fourth plan is an insert, not a code change.
+          Renewal inside 30 days escalates to the warning tone.
+        </p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ── Specimens ────────────────────────────────────────────────────── -->
+  <section class="band">
+    <p class="eyebrow">Components</p>
+    <h2>Built to make the wrong thing hard</h2>
+
+    <div class="specimens" style="margin-top:2.5rem;">
+      <div class="specimen">
+        <h3>Buttons</h3>
+        <div class="specimen-row">
+          <span class="inline-flex h-11 items-center rounded-md bg-primary px-4 text-body-sm font-medium text-primary-fg shadow-xs">Primary</span>
+          <span class="inline-flex h-11 items-center rounded-md border border-line bg-surface px-4 text-body-sm font-medium text-content shadow-xs">Secondary</span>
+        </div>
+        <div class="specimen-row">
+          <span class="inline-flex h-11 items-center rounded-md bg-accent px-4 text-body-sm font-medium text-accent-fg shadow-xs">Accent</span>
+          <span class="inline-flex h-11 items-center rounded-md bg-danger px-4 text-body-sm font-medium text-white shadow-xs">Danger</span>
+        </div>
+        <div class="specimen-row">
+          <span class="inline-flex h-11 items-center gap-2 rounded-md bg-primary px-4 text-body-sm font-medium text-primary-fg opacity-50 shadow-xs">
+            <svg class="size-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>Buying airtime…
+          </span>
+        </div>
+        <p class="note">44&nbsp;px tall — the minimum comfortable touch target. A loading button is
+        also <code style="font-family:var(--font-mono);font-size:0.85em;">disabled</code>, so a slow
+        connection can't turn one purchase into three.</p>
+      </div>
+
+      <div class="specimen">
+        <h3>Status</h3>
+        <div class="specimen-row">
+          <span class="inline-flex items-center rounded-full bg-success-subtle px-2.5 py-0.5 text-caption font-medium text-success-fg">Successful</span>
+          <span class="inline-flex items-center rounded-full bg-warning-subtle px-2.5 py-0.5 text-caption font-medium text-warning-fg">Pending</span>
+          <span class="inline-flex items-center rounded-full bg-danger-subtle px-2.5 py-0.5 text-caption font-medium text-danger-fg">Failed</span>
+        </div>
+        <div class="specimen-row">
+          <span class="inline-flex items-center rounded-full bg-info-subtle px-2.5 py-0.5 text-caption font-medium text-info-fg">Confirming</span>
+          <span class="inline-flex items-center rounded-full bg-primary-subtle px-2.5 py-0.5 text-caption font-medium text-content-brand">Active</span>
+          <span class="inline-flex items-center rounded-full bg-subtle px-2.5 py-0.5 text-caption font-medium text-content-muted">Refunded</span>
+        </div>
+        <p class="note">Every badge pairs its tint with a <em>word</em>. Roughly 8% of Nigerian men
+        have some colour vision deficiency, and everyone reads a phone in sunlight.</p>
+      </div>
+
+      <div class="specimen">
+        <h3>Fields</h3>
+        <div style="display:grid;gap:0.75rem;">
+          <div class="flex flex-col gap-1.5">
+            <label class="text-body-sm font-medium text-content">Amount</label>
+            <div class="relative">
+              <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-body-md font-medium text-content-muted">₦</span>
+              <input class="h-11 w-full rounded-md border border-line bg-surface pl-9 pr-3 font-mono text-body-md tabular-nums text-content" value="5,000" readonly />
+            </div>
+          </div>
+          <div class="flex flex-col gap-1.5">
+            <label class="text-body-sm font-medium text-content">Phone number</label>
+            <input class="h-11 w-full rounded-md border border-[var(--color-bg-danger)] bg-surface px-3 text-body-md text-content" value="0123456789" readonly />
+            <p class="text-caption text-danger-fg">Enter a valid Nigerian mobile number</p>
+          </div>
+        </div>
+        <p class="note">The <code style="font-family:var(--font-mono);font-size:0.85em;">label</code>
+        prop is <em>required</em>, not optional — a placeholder is not a label, and making it
+        mandatory is the only reliable way to stop unlabelled fields shipping.</p>
+      </div>
+
+      <div class="specimen">
+        <h3>Type scale</h3>
+        <div style="display:grid;gap:0.5rem;">
+          <p class="text-display-sm text-content">Display</p>
+          <p class="text-heading-md text-content">Heading</p>
+          <p class="text-body-md text-content">Body — the default reading size</p>
+          <p class="text-caption text-content-muted">Caption · metadata</p>
+          <p class="text-overline uppercase text-content-muted">Overline label</p>
+          <p class="text-numeric tabular-nums text-content">₦1,240,000.00</p>
+        </div>
+        <p class="note">Display sizes are fluid; body sizes are not — a user who set their browser
+        text size meant it. Tabular figures everywhere digits appear, so a balance updating from
+        ₦1,111 to ₦8,888 doesn't visibly jitter.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Footer ───────────────────────────────────────────────────────── -->
+  <footer class="band">
+    <div class="prose">
+      <h2>Running it for real</h2>
+      <p>
+        The live app needs PostgreSQL and Redis behind the NestJS API. From the repository root:
+      </p>
+      <pre style="overflow-x:auto;background:var(--color-bg-subtle);border:1px solid var(--rule);border-radius:10px;padding:1rem 1.125rem;font-family:var(--font-mono);font-size:0.8125rem;line-height:1.7;margin-top:1.25rem;"><code>pnpm install
+pnpm docker:up        # Postgres + Redis
+pnpm db:migrate &amp;&amp; pnpm db:seed
+pnpm dev              # web :3000 · api :4000</code></pre>
+      <p>
+        Branch <code>claude/nigeria-fintech-govtech-6rsp8g</code> · 97 tests passing ·
+        typecheck clean across four workspaces · both apps building.
+      </p>
+      <p class="note" style="margin-top:2rem;">
+        Geist is the specified typeface; this preview renders in the system stack because
+        the page ships without external font requests.
+      </p>
+    </div>
+  </footer>
+
+</div>

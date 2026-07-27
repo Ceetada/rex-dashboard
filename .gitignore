@@ -19,3 +19,7 @@ apps/api/prisma/generated/
 # The generated theme is committed so the web app builds without running the generator.
 !packages/design-tokens/dist/
 !packages/design-tokens/dist/theme.css
+
+# Preview build artefacts — regenerate with `pnpm --filter @evas/web preview`
+apps/web/preview/compiled.css
+apps/web/preview/dist/

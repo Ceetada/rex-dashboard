@@ -18,7 +18,7 @@ Three observations drove the system:
 
 1. **The green is dark enough to be a primary action colour.** At 7.12:1 against white it clears AA for normal text and AAA for large — so it can be a button fill, a link colour and a focus ring without compromise. Many brand greens are not, and require an invented darker variant.
 
-2. **The gold is very light.** White text on it reaches only 1.63:1. It can therefore never carry white text, which makes it an *accent*, not a second primary. The system enforces this with a token (`text-on-accent` is always ink) and a test that asserts the failure explicitly so nobody re-derives it later.
+2. **The gold is very light.** White text on it reaches only 1.49:1. It can therefore never carry white text, which makes it an *accent*, not a second primary. The system enforces this with a token (`text-on-accent` is always ink) and a test that asserts the failure explicitly so nobody re-derives it later.
 
 3. **The ground is warm-neutral, not pure white.** Cards are pure white and the canvas is `#F7F8F7`, which gives surfaces a free step of elevation without a shadow.
 
@@ -85,12 +85,12 @@ Carry a trace of the brand hue (chroma ≈ 0.005) so greys read as part of the f
 | 300 | `#D3D6D4` | Default borders |
 | 400 | `#BCBFBD` | Muted text (dark theme) |
 | 500 | `#9C9F9D` | Disabled only |
-| 600 | `#717672` | **Muted text (light theme)** |
-| 700 | `#5A5E5B` | |
-| 800–900 | `#444945` → `#2F3430` | |
+| 600 | `#6A6F6B` | **Muted text (light theme)** |
+| 700 | `#555A56` | |
+| 800–900 | `#424643` → `#2E322F` | |
 | 950 | `#161A17` | Body text (light) · canvas (dark) |
 
-**neutral-600 was tuned against the darkest background muted text is allowed to sit on**, not against white. Tuning it on white gives 4.63:1 and looks fine in isolation — then fails on every table header and inset panel in the product. On `bg-subtle` the shipped value gives 4.66:1.
+**neutral-600 was tuned against the darkest background muted text is allowed to sit on**, not against white. The first candidate (`#717672`) gives 4.63:1 on white and looks fine in isolation — then lands at 4.21:1 on `bg-subtle` and fails on every table header and inset panel in the product. The shipped value clears 4.66:1 there.
 
 This was caught by the contrast test, not by review.
 

@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "next lint",
     "test": "vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "preview": "node preview/build.mjs"
   },
   "dependencies": {
     "@evas/contracts": "workspace:*",
