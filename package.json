@@ -8,6 +8,7 @@
     "node": ">=20.11.0"
   },
   "scripts": {
+    "setup": "node scripts/setup-env.mjs",
     "prepare": "pnpm --filter \"./packages/*\" build",
     "dev": "pnpm --filter \"./packages/*\" build && pnpm --parallel --filter \"./apps/*\" dev",
     "build": "pnpm --filter \"./packages/*\" build && pnpm --filter \"./apps/*\" build",

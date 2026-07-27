@@ -51,27 +51,19 @@ Full rationale in [docs/06-design-system.md](docs/06-design-system.md).
 
 ## Running it
 
-These steps are verified end to end — signup, login, step-up OTP, dashboard, health, retirement and airtime all render against the real API.
+Verified from a clean clone against an empty database — install, migrate, seed, sign in, dashboard.
+
+**You need:** Node 20.11+, pnpm, and Docker.
 
 ```bash
-pnpm install
+pnpm install            # also builds the workspace packages and the Prisma client
+pnpm setup              # writes .env files with real generated secrets
 pnpm docker:up          # Postgres + Redis
 
-cp apps/api/.env.example apps/api/.env
-cp apps/web/.env.example apps/web/.env.local
-```
-
-Fill in the four secrets in `apps/api/.env` — the config schema rejects placeholders:
-
-```bash
-openssl rand -base64 32     # JWT_SECRET, COOKIE_SECRET, BLIND_INDEX_KEY
-                            # and ENCRYPTION_KEYS as  1:<key>
-```
-
-```bash
-pnpm db:migrate
+pnpm db:migrate         # creates the tables
 pnpm db:seed            # roles, states, providers, 3 health plans, catalogues
 pnpm db:seed:demo       # one fully-onboarded user with a plausible history
+
 pnpm dev                # web :3000 · api :4000 · docs :4000/api/docs
 ```
 
@@ -82,25 +74,48 @@ chidinma@example.com
 Correct-Horse7-Battery
 ```
 
-The first sign-in from a new device triggers a real step-up challenge — that is the security design working, not a bug. Outside production the code is printed to the **API terminal**:
+The first sign-in from a new device triggers a real step-up challenge — that is the
+security design working, not a bug. Outside production the code is printed to the
+**API terminal**:
 
 ```
 WARN [AuthService] [dev] OTP for +234803•••67 (DEVICE_TRUST): 170823
 ```
 
-There is no bypass and no weakened check; the code is simply logged instead of being sent by SMS to a number that, in local development, nobody can receive.
+There is no bypass and no weakened check; the code is simply logged instead of being
+sent by SMS to a number that, in local development, nobody can receive.
 
-The API validates its entire configuration at boot. A missing `ENCRYPTION_KEYS` stops the process immediately rather than surfacing hours later as a 500 the first time someone saves a BVN.
+### What each step is doing
 
-## Verify it
+| Step | What happens |
+|---|---|
+| `pnpm install` | Installs dependencies, builds `@evas/design-tokens` and `@evas/contracts`, and generates the Prisma client. Without the last two a clean checkout cannot typecheck or start. |
+| `pnpm setup` | Copies both `.env.example` files and fills the four secrets with 32 random bytes each. Idempotent — it never overwrites a value you have already set. |
+| `pnpm docker:up` | Starts PostgreSQL 16 and Redis 7. The API waits on Postgres's health check, not merely on the container starting. |
+| `pnpm db:migrate` | Applies the migration. Run it again after any schema change. |
+| `pnpm db:seed` | Reference data. Idempotent by natural key, so it is also how a new plan or provider is rolled out. |
+| `pnpm db:seed:demo` | The demo user, wallet, health cover, retirement and pension history. Never runs with `NODE_ENV=production`. |
+| `pnpm dev` | Runs both apps. Output interleaves — the OTP line comes from the API. |
 
-```bash
-pnpm typecheck                              # both apps + packages
-pnpm --filter @evas/design-tokens test      # 45 contrast assertions
-pnpm --filter @evas/contracts test          # 34 Nigerian primitive tests
-pnpm --filter @evas/api test                # wallet ledger invariants
-pnpm build
-```
+### If something goes wrong
+
+**The API exits immediately with a config error.** That is deliberate: configuration is
+validated at boot, so a missing key stops the process rather than surfacing hours later
+as a 500 the first time someone saves a BVN. The message names the offending variable.
+Re-run `pnpm setup`.
+
+**`docker:up` cannot pull images.** Any PostgreSQL 16 and Redis 7 will do — point
+`DATABASE_URL` and `REDIS_URL` in `apps/api/.env` at your own instances.
+
+**Port 3000 or 4000 already in use.** Change `PORT` in `apps/api/.env`, and set
+`NEXT_PUBLIC_API_URL` in `apps/web/.env.local` to match.
+
+**No OTP appears.** It goes to the API's output, not the browser. With both apps running
+in one terminal the logs interleave — look for the `WARN [AuthService]` line, or run the
+API alone in a second terminal with `pnpm --filter @evas/api dev`.
+
+**Sign-in stops asking for a code.** Expected — the device is trusted after the first
+successful challenge. Revoke it under Settings → Devices to see the flow again.
 
 ## Documentation
 
