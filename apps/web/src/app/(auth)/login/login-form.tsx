@@ -86,7 +86,20 @@ export function LoginForm() {
         <p className="text-body-md text-content-muted">Sign in to your account</p>
       </div>
 
+      {/*
+        method="post" is a safety net, not a real submission target.
+
+        If a submit lands before React has hydrated — a fast typist on a slow
+        connection, which is the norm on Nigerian mobile data — the browser
+        falls back to a native form submission. The default method is GET, and
+        a GET submit puts every field in the query string: the password ends up
+        in browser history, in server access logs, and in the Referer header
+        sent to any third party. Declaring POST means that fallback carries the
+        credentials in a request body instead, and lands on a 405 rather than
+        leaking them.
+      */}
       <form
+        method="post"
         onSubmit={handleSubmit((values) => login.mutate(values))}
         className="flex flex-col gap-5"
         noValidate

@@ -1,70 +1,100 @@
 /**
- * Builds the standalone UI preview.
+ * Builds the standalone preview page.
  *
  * The preview exists because the real app needs PostgreSQL and the NestJS API
- * behind it, so it cannot be handed to someone as a single file. This compiles
- * the *actual* Tailwind output from the component sources, inlines it together
- * with the generated theme tokens, and emits one self-contained HTML file — so
- * what the preview shows is genuinely the design system rather than a
- * hand-drawn approximation of it.
+ * behind it, so it cannot be handed to someone as a single file. This inlines
+ * the generated design tokens and embeds screenshots captured from the running
+ * application, producing one self-contained HTML file with no external
+ * requests — which is also what lets it be published under a strict CSP.
  *
  *   pnpm --filter @evas/web preview
+ *
+ * Screenshots come from preview/shots/*.webp. Regenerate them with
+ * `pnpm --filter @evas/web preview:capture` while the dev servers are running.
  */
 
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const webRoot = resolve(here, '..');
+const repoRoot = resolve(here, '../../..');
 
 const TEMPLATE = resolve(here, 'index.html');
-const INPUT_CSS = resolve(here, 'input.css');
-const CONFIG = resolve(here, 'tailwind.preview.ts');
-const COMPILED = resolve(here, 'compiled.css');
+const SHOTS = resolve(here, 'shots');
+const THEME = resolve(repoRoot, 'packages/design-tokens/dist/theme.css');
 const OUT_DIR = resolve(here, 'dist');
 const OUT = resolve(OUT_DIR, 'evas-preview.html');
 
-// The token CSS is a committed build artefact, but regenerate it anyway so the
-// preview can never drift from the ramps the tests actually assert.
+/** Template placeholder -> screenshot basename. */
+const IMAGES = {
+  __M_DASH_LIGHT__: 'm-dashboard-light',
+  __M_DASH_DARK__: 'm-dashboard-dark',
+  __M_HEALTH__: 'm-health',
+  __M_RETIRE__: 'm-retirement',
+  __M_AIRTIME__: 'm-airtime',
+  __M_LOGIN__: 'm-login',
+  __D_DASH_LIGHT__: 'd-dashboard-light',
+  __D_DASH_DARK__: 'd-dashboard-dark',
+  __D_HEALTH__: 'd-health',
+  __D_RETIRE__: 'd-retirement',
+};
+
+// Regenerate the tokens rather than trusting the committed copy, so the preview
+// can never drift from the ramps the contrast tests actually assert.
 execFileSync('pnpm', ['--filter', '@evas/design-tokens', 'build'], {
-  cwd: resolve(webRoot, '../..'),
+  cwd: repoRoot,
   stdio: 'inherit',
 });
 
-execFileSync(
-  'npx',
-  ['tailwindcss', '-c', CONFIG, '-i', INPUT_CSS, '-o', COMPILED, '--minify'],
-  { cwd: webRoot, stdio: 'inherit' },
-);
+let html = readFileSync(TEMPLATE, 'utf8');
 
-const css = readFileSync(COMPILED, 'utf8');
-const template = readFileSync(TEMPLATE, 'utf8');
+const theme = readFileSync(THEME, 'utf8');
+if (!html.includes('/*__THEME__*/')) throw new Error('index.html is missing the /*__THEME__*/ placeholder');
+html = html.replace('/*__THEME__*/', theme);
 
-const PLACEHOLDER = '/*__TAILWIND__*/';
-if (!template.includes(PLACEHOLDER)) {
-  throw new Error(`preview/index.html is missing the ${PLACEHOLDER} placeholder`);
+let embedded = 0;
+for (const [placeholder, name] of Object.entries(IMAGES)) {
+  const file = resolve(SHOTS, `${name}.webp`);
+  if (!existsSync(file)) {
+    throw new Error(`Missing screenshot ${name}.webp — run \`pnpm preview:capture\` first`);
+  }
+  const dataUri = `data:image/webp;base64,${readFileSync(file).toString('base64')}`;
+  html = html.replaceAll(placeholder, dataUri);
+  embedded += 1;
 }
 
-const html = template.replace(PLACEHOLDER, css);
-
-// Fail loudly rather than shipping a preview that silently lost its theming.
-// A missing token here means the page renders unstyled for whoever opens it.
+// Fail loudly rather than shipping a page that silently lost its theming or its
+// images. A preview that renders unstyled, or with broken image icons, is worse
+// than no preview — and minifiers and templating both fail quietly.
 const required = [
   '--color-bg-primary',
   '--palette-green-600',
   '--palette-gold-400',
-  'data-theme=dark',
-  'data-theme=light',
   'prefers-color-scheme',
 ];
 const missing = required.filter((token) => !html.includes(token));
-if (missing.length > 0) {
-  throw new Error(`Preview build lost required tokens: ${missing.join(', ')}`);
+
+// Quote-agnostic: the generator emits [data-theme='dark'], a minifier would
+// strip the quotes to [data-theme=dark], and both are valid. Matching on the
+// literal string is how this check produced a false failure the first time.
+for (const theme of ['dark', 'light']) {
+  if (!new RegExp(`data-theme=['"]?${theme}['"]?\\]`).test(html)) {
+    missing.push(`[data-theme=${theme}] override`);
+  }
 }
+if (missing.length > 0) throw new Error(`Preview lost required tokens: ${missing.join(', ')}`);
+
+const leftover = html.match(/__[A-Z_]+__/g);
+if (leftover) throw new Error(`Unreplaced placeholders: ${[...new Set(leftover)].join(', ')}`);
+
+// A strict CSP blocks every external request, so any remaining absolute URL in
+// an asset position would render as a broken image.
+if (/\ssrc="https?:/.test(html)) throw new Error('Preview references an external asset');
 
 mkdirSync(OUT_DIR, { recursive: true });
 writeFileSync(OUT, html, 'utf8');
 
-console.log(`✓ ${OUT} (${(html.length / 1024).toFixed(0)} KB, self-contained)`);
+console.log(`✓ ${OUT}`);
+console.log(`  ${(html.length / 1024).toFixed(0)} KB · ${embedded} screenshots embedded · self-contained`);

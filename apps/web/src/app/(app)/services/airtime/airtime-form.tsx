@@ -104,8 +104,12 @@ export function AirtimeForm({ recipients }: { recipients: SavedRecipient[] }) {
     return <PurchaseReceipt reference={success.reference} status={success.status} />;
   }
 
+  // method="post" for the same reason as the sign-in form: a pre-hydration
+  // submit must not put the recipient's phone number in the query string,
+  // where it would land in server logs and browser history.
   return (
     <form
+      method="post"
       onSubmit={handleSubmit((values) => purchase.mutate(values))}
       className="flex flex-col gap-6"
       noValidate
