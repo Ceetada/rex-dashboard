@@ -1,0 +1,81 @@
+@import '@evas/design-tokens/theme.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--color-bg-canvas);
+    color: var(--color-text-primary);
+    font-family: var(--font-sans);
+    font-size: var(--font-size-body-md);
+    line-height: var(--line-height-body-md);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Money and balances must not jitter as digits change. */
+  .tabular,
+  [data-numeric] {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum';
+  }
+
+  /* A visible skip link for keyboard users — the first thing Tab should reach. */
+  .skip-link {
+    position: absolute;
+    left: -9999px;
+    z-index: 999;
+  }
+  .skip-link:focus {
+    left: 1rem;
+    top: 1rem;
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-md);
+    background: var(--color-bg-primary);
+    color: var(--color-text-on-primary);
+  }
+
+  ::selection {
+    background: var(--color-bg-primary-subtle);
+    color: var(--color-text-brand);
+  }
+}
+
+@layer components {
+  /*
+   * Loading placeholder. The shimmer is slow and low-contrast on purpose —
+   * an aggressive one competes with real content for attention.
+   */
+  .skeleton {
+    position: relative;
+    overflow: hidden;
+    background: var(--color-bg-subtle);
+    border-radius: var(--radius-sm);
+  }
+  .skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in oklab, var(--color-bg-surface) 60%, transparent),
+      transparent
+    );
+    animation: shimmer 1.8s infinite;
+  }
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
