@@ -26,8 +26,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # No version pin here on purpose: the action reads packageManager from
+      # package.json. Specifying it in both places makes action-setup fail
+      # outright, and is one more thing to keep in sync.
       - uses: pnpm/action-setup@v4
-        with: { version: 10 }
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -67,8 +69,10 @@ jobs:
           --health-timeout 3s --health-retries 10
     steps:
       - uses: actions/checkout@v4
+      # No version pin here on purpose: the action reads packageManager from
+      # package.json. Specifying it in both places makes action-setup fail
+      # outright, and is one more thing to keep in sync.
       - uses: pnpm/action-setup@v4
-        with: { version: 10 }
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -87,8 +91,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # No version pin here on purpose: the action reads packageManager from
+      # package.json. Specifying it in both places makes action-setup fail
+      # outright, and is one more thing to keep in sync.
       - uses: pnpm/action-setup@v4
-        with: { version: 10 }
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -104,8 +110,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # No version pin here on purpose: the action reads packageManager from
+      # package.json. Specifying it in both places makes action-setup fail
+      # outright, and is one more thing to keep in sync.
       - uses: pnpm/action-setup@v4
-        with: { version: 10 }
       - uses: actions/setup-node@v4
         with:
           node-version: 22
