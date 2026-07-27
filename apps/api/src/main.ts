@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 
-import { Logger, ValidationPipe } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
@@ -72,13 +72,12 @@ async function bootstrap(): Promise<void> {
 
   app.setGlobalPrefix('api/v1', { exclude: ['health', 'health/ready'] });
   app.useGlobalFilters(new HttpExceptionFilter());
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-    }),
-  );
+
+  // No global ValidationPipe. Validation is done with Zod (ZodValidationPipe),
+  // using the very same schemas the web app validates against — so the client
+  // and server cannot drift on what a valid Nigerian phone number is. Nest's
+  // class-validator pipe would be a second, redundant validation system and
+  // would pull in decorators we do not use.
 
   // A JSON body larger than this is not a legitimate request to this API.
   app.use((req: Request, res: Response, next: NextFunction) => {

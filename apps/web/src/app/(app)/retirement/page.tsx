@@ -6,7 +6,7 @@ import { ContributionChart } from '@/components/retirement/contribution-chart';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { getPension, getRetirement } from '@/lib/queries';
+import { getPension, getRetirement, optional } from '@/lib/queries';
 import { formatBalance, formatDate, relativeTime } from '@/lib/format';
 
 export const metadata: Metadata = { title: 'Retirement' };
@@ -21,8 +21,10 @@ export const metadata: Metadata = { title: 'Retirement' };
  */
 export default async function RetirementPage() {
   const [savings, pension] = await Promise.all([
-    getRetirement().catch(() => null),
-    getPension().catch(() => null),
+    // Both are genuinely optional: a user may have savings, a pension, or
+    // neither, and 404 is the normal answer rather than a failure.
+    optional<RetirementAccountDto | null>(getRetirement, null),
+    optional<PensionAccountDto | null>(getPension, null),
   ]);
 
   return (

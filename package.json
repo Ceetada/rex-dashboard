@@ -2,7 +2,7 @@
   "name": "evas-platform",
   "version": "0.1.0",
   "private": true,
-  "description": "Evas — unified healthcare, retirement and digital services platform for Nigeria",
+  "description": "Evas \u2014 unified healthcare, retirement and digital services platform for Nigeria",
   "packageManager": "pnpm@10.33.0",
   "engines": {
     "node": ">=20.11.0"
@@ -19,7 +19,8 @@
     "db:migrate": "pnpm --filter @evas/api prisma:migrate",
     "db:seed": "pnpm --filter @evas/api prisma:seed",
     "docker:up": "docker compose -f infra/docker/docker-compose.yml up -d",
-    "docker:down": "docker compose -f infra/docker/docker-compose.yml down"
+    "docker:down": "docker compose -f infra/docker/docker-compose.yml down",
+    "db:seed:demo": "pnpm --filter @evas/api prisma:seed:demo"
   },
   "devDependencies": {
     "prettier": "^3.3.3",

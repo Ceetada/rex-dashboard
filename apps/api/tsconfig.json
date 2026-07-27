@@ -20,9 +20,12 @@
     "strictNullChecks": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "paths": {
-      "@evas/contracts": ["../../packages/contracts/src/index.ts"]
-    }
+    // No path mapping for @evas/contracts on purpose. Pointing it at source
+    // outside this project drags tsc's inferred rootDir up to the workspace
+    // root, which nests the build output at dist/apps/api/src/main.js and
+    // breaks `node dist/main.js` in the container. It resolves through the
+    // pnpm workspace symlink to the built package instead.
+    "rootDir": "./src"
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]

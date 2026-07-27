@@ -406,6 +406,21 @@ export class AuthService {
         body: `Your code is ${code}. It expires in 10 minutes. Never share it with anyone — Evas will never ask you for it.`,
         channels: destination.includes('@') ? ['EMAIL'] : ['SMS'],
       });
+
+      // Outside production, print the code to the server log.
+      //
+      // Without this, local development is unusable: the first login from a new
+      // device issues an OTP over SMS, but SMS is suppressed to an unverified
+      // number, so the code can never be received and no one can get past the
+      // login screen. Printing it keeps the real challenge flow intact — no
+      // bypass, no weakened check — while making it possible to complete.
+      //
+      // The guard is on NODE_ENV rather than a feature flag deliberately: a
+      // flag can be switched on in production by accident, and an OTP in a
+      // production log is a credential in a log.
+      if (this.config.get<string>('NODE_ENV') !== 'production') {
+        this.logger.warn(`[dev] OTP for ${this.maskDestination(destination)} (${purpose}): ${code}`);
+      }
     }
 
     return challenge;

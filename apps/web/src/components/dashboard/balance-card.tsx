@@ -56,8 +56,18 @@ export function BalanceCard({ balanceKobo, availableKobo, isFrozen, onTopUp }: B
         className="pointer-events-none absolute -bottom-24 -left-10 h-48 w-48 rotate-45 rounded-3xl bg-white opacity-[0.05]"
       />
 
-      <div className="relative flex items-start justify-between gap-4">
-        <div className="min-w-0">
+      {/*
+        The label and the action share the top row; the balance gets a row to
+        itself beneath them.
+
+        The obvious layout — number on the left, button on the right — puts the
+        two on a collision course, and at 360px the number loses: a balance in
+        the millions gets truncated to "₦124,500…". Truncating the single figure
+        people opened the app to read is the worst possible thing this card can
+        do, so it is given the full card width and the button moved above it.
+      */}
+      <div className="relative flex flex-col gap-3">
+        <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2">
             <p className="text-overline uppercase text-white/70">Wallet balance</p>
             <button
@@ -71,12 +81,25 @@ export function BalanceCard({ balanceKobo, availableKobo, isFrozen, onTopUp }: B
             </button>
           </div>
 
+          <Button
+            variant="accent"
+            size="sm"
+            onClick={onTopUp}
+            disabled={isFrozen}
+            className="-mt-1 shrink-0 shadow-sm"
+          >
+            <Plus aria-hidden />
+            Top up
+          </Button>
+        </div>
+
+        <div>
           <motion.p
             key={hidden ? 'hidden' : String(balanceKobo)}
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.22, ease: [0.05, 0.7, 0.1, 1] }}
-            className="mt-1.5 truncate text-[clamp(1.75rem,1.2rem+2vw,2.5rem)] font-semibold leading-tight tracking-tight tabular-nums"
+            className="text-[clamp(1.75rem,1.2rem+2vw,2.5rem)] font-semibold leading-tight tracking-tight tabular-nums"
             data-numeric
           >
             {hidden ? '₦ • • • • • •' : formatBalance(balanceKobo)}
@@ -99,17 +122,6 @@ export function BalanceCard({ balanceKobo, availableKobo, isFrozen, onTopUp }: B
             </p>
           )}
         </div>
-
-        <Button
-          variant="accent"
-          size="sm"
-          onClick={onTopUp}
-          disabled={isFrozen}
-          className="shrink-0 shadow-sm"
-        >
-          <Plus aria-hidden />
-          Top up
-        </Button>
       </div>
     </div>
   );

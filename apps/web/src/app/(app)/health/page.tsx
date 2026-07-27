@@ -5,7 +5,7 @@ import type { HealthPlanDto, HealthSubscriptionDto } from '@evas/contracts';
 import { Badge, statusTone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { getHealthPlans, getHealthSubscriptions } from '@/lib/queries';
+import { getHealthPlans, getHealthSubscriptions, optional } from '@/lib/queries';
 import { formatBalance, formatDate } from '@/lib/format';
 import { cn } from '@/lib/cn';
 
@@ -22,7 +22,10 @@ export const metadata: Metadata = { title: 'Health plans' };
 export default async function HealthPage() {
   const [plans, subscriptions] = await Promise.all([
     getHealthPlans(),
-    getHealthSubscriptions().catch(() => [] as HealthSubscriptionDto[]),
+    // Tolerant: a signed-out visitor still gets the public catalogue. optional()
+    // keeps an expired session redirecting to sign-in instead of silently
+    // rendering "no cover".
+    optional(getHealthSubscriptions, [] as HealthSubscriptionDto[]),
   ]);
 
   const subscribedPlanIds = new Set(subscriptions.map((s) => s.plan.id));

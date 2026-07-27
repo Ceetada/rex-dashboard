@@ -17,6 +17,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@evas/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@nestjs/common':
         specifier: ^10.4.6
         version: 10.4.22(reflect-metadata@0.2.2)(rxjs@7.8.2)

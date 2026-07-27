@@ -49,23 +49,46 @@ Accessibility is a build gate. `contrast.test.ts` asserts all 45 foreground/back
 
 Full rationale in [docs/06-design-system.md](docs/06-design-system.md).
 
-## Getting started
+## Running it
+
+These steps are verified end to end — signup, login, step-up OTP, dashboard, health, retirement and airtime all render against the real API.
 
 ```bash
 pnpm install
-
-# Postgres + Redis
-pnpm docker:up
+pnpm docker:up          # Postgres + Redis
 
 cp apps/api/.env.example apps/api/.env
 cp apps/web/.env.example apps/web/.env.local
-# Generate the secrets the config schema requires:
-#   openssl rand -base64 32
-
-pnpm db:migrate
-pnpm db:seed        # roles, states, providers, 3 health plans, catalogues
-pnpm dev            # web :3000 · api :4000 · docs :4000/api/docs
 ```
+
+Fill in the four secrets in `apps/api/.env` — the config schema rejects placeholders:
+
+```bash
+openssl rand -base64 32     # JWT_SECRET, COOKIE_SECRET, BLIND_INDEX_KEY
+                            # and ENCRYPTION_KEYS as  1:<key>
+```
+
+```bash
+pnpm db:migrate
+pnpm db:seed            # roles, states, providers, 3 health plans, catalogues
+pnpm db:seed:demo       # one fully-onboarded user with a plausible history
+pnpm dev                # web :3000 · api :4000 · docs :4000/api/docs
+```
+
+Open **http://localhost:3000** and sign in:
+
+```
+chidinma@example.com
+Correct-Horse7-Battery
+```
+
+The first sign-in from a new device triggers a real step-up challenge — that is the security design working, not a bug. Outside production the code is printed to the **API terminal**:
+
+```
+WARN [AuthService] [dev] OTP for +234803•••67 (DEVICE_TRUST): 170823
+```
+
+There is no bypass and no weakened check; the code is simply logged instead of being sent by SMS to a number that, in local development, nobody can receive.
 
 The API validates its entire configuration at boot. A missing `ENCRYPTION_KEYS` stops the process immediately rather than surfacing hours later as a 500 the first time someone saves a BVN.
 
