@@ -1,0 +1,115 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A new push supersedes an in-flight run on the same branch.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Values are non-secret placeholders; every one is required by the config
+  # schema, which fails the boot if anything is missing.
+  DATABASE_URL: postgresql://evas:evas@localhost:5432/evas_test?schema=public
+  REDIS_URL: redis://localhost:6379
+  JWT_SECRET: ci-only-jwt-secret-at-least-32-characters-long
+  COOKIE_SECRET: ci-only-cookie-secret-at-least-32-chars-long
+  ENCRYPTION_KEYS: '1:Y2ktb25seS1lbmNyeXB0aW9uLWtleS0zMi1ieXRlcyE='
+  BLIND_INDEX_KEY: Y2ktb25seS1ibGluZC1pbmRleC1rZXktMzItYnl0ZXMhIQ==
+
+jobs:
+  quality:
+    name: Types, lint and unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @evas/api prisma:generate
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Design token contrast gates
+        # Accessibility is a merge blocker, not a review note. This asserts
+        # every foreground/background pairing the system ships, both themes.
+        run: pnpm --filter @evas/design-tokens test
+      - name: Contract tests
+        run: pnpm --filter @evas/contracts test
+      - name: API unit tests
+        run: pnpm --filter @evas/api test
+
+  integration:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: evas
+          POSTGRES_PASSWORD: evas
+          POSTGRES_DB: evas_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s
+          --health-timeout 3s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @evas/api prisma:generate
+      - name: Apply migrations
+        run: pnpm --filter @evas/api prisma:deploy
+      - name: Integration suite
+        # Runs against real Postgres and Redis. The concurrency tests prove
+        # SELECT ... FOR UPDATE actually serialises debits, which no mock can.
+        run: pnpm --filter @evas/api test:integration
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @evas/api prisma:generate
+      - run: pnpm --filter @evas/design-tokens build
+      - run: pnpm --filter @evas/api build
+      - run: pnpm --filter @evas/web build
+
+  security:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Audit
+        run: pnpm audit --audit-level=high
