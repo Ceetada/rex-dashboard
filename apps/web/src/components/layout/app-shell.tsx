@@ -15,6 +15,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 
+import { Wordmark } from '@/components/brand/wordmark';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { cn } from '@/lib/cn';
 
@@ -59,7 +60,7 @@ export function AppShell({
       {/* ── Desktop sidebar ── */}
       <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r border-line-subtle bg-surface lg:flex">
         <div className="flex h-16 items-center px-6">
-          <Wordmark />
+          <Logo />
         </div>
 
         <nav aria-label="Main" className="flex flex-1 flex-col gap-0.5 px-3 py-4">
@@ -90,7 +91,7 @@ export function AppShell({
 
       {/* ── Mobile header ── */}
       <header className="sticky top-0 z-[var(--z-header)] flex h-14 items-center justify-between border-b border-line-subtle bg-surface/85 px-4 backdrop-blur-md lg:hidden">
-        <Wordmark />
+        <Logo />
         <div className="flex items-center gap-1">
           <Link
             href="/notifications"
@@ -158,31 +159,19 @@ export function AppShell({
 }
 
 /**
- * The wordmark, set in type rather than shipped as an image.
+ * The wordmark as a link home.
  *
- * The logo is a lowercase "evas" in brand green with a gold diamond over the
- * "a". Reproducing that structurally keeps it crisp at any size, recolours
- * correctly in dark mode, and costs no network request — while the raster in
- * brand/ remains the source of truth for print and external use.
+ * On a dark canvas the brand green is too dark to read, so `--logo-ink` moves
+ * up the ramp; the gold is already light and stays as drawn.
  */
-function Wordmark() {
+function Logo() {
   return (
     <Link
       href="/dashboard"
       className="flex items-center rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring-focus)]"
       aria-label="Evas — go to dashboard"
     >
-      <span className="relative text-[1.375rem] font-bold lowercase leading-none tracking-tight text-content-brand">
-        ev
-        <span className="relative">
-          a
-          <span
-            aria-hidden
-            className="absolute -right-0.5 -top-1 size-2 rotate-45 rounded-[1px] bg-[var(--palette-gold-400)]"
-          />
-        </span>
-        s
-      </span>
+      <Wordmark className="h-6 [--logo-ink:var(--color-text-brand)]" />
     </Link>
   );
 }

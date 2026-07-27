@@ -1,5 +1,7 @@
 import Link from 'next/link';
 
+import { Wordmark } from '@/components/brand/wordmark';
+
 /**
  * Auth chrome: no navigation, no distractions. Someone on this screen has
  * exactly one job, and every extra link is a way to fail at it.
@@ -13,17 +15,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           className="rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring-focus)]"
           aria-label="Evas"
         >
-          <span className="relative text-2xl font-bold lowercase leading-none tracking-tight text-content-brand">
-            ev
-            <span className="relative">
-              a
-              <span
-                aria-hidden
-                className="absolute -right-0.5 -top-1 size-2.5 rotate-45 rounded-[1px] bg-[var(--palette-gold-400)]"
-              />
-            </span>
-            s
-          </span>
+          <Wordmark className="h-8" />
         </Link>
       </header>
 

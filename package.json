@@ -8,7 +8,8 @@
     "node": ">=20.11.0"
   },
   "scripts": {
-    "dev": "pnpm --parallel --filter \"./apps/*\" dev",
+    "prepare": "pnpm --filter \"./packages/*\" build",
+    "dev": "pnpm --filter \"./packages/*\" build && pnpm --parallel --filter \"./apps/*\" dev",
     "build": "pnpm --filter \"./packages/*\" build && pnpm --filter \"./apps/*\" build",
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint",
@@ -18,9 +19,9 @@
     "db:generate": "pnpm --filter @evas/api prisma:generate",
     "db:migrate": "pnpm --filter @evas/api prisma:migrate",
     "db:seed": "pnpm --filter @evas/api prisma:seed",
+    "db:seed:demo": "pnpm --filter @evas/api prisma:seed:demo",
     "docker:up": "docker compose -f infra/docker/docker-compose.yml up -d",
-    "docker:down": "docker compose -f infra/docker/docker-compose.yml down",
-    "db:seed:demo": "pnpm --filter @evas/api prisma:seed:demo"
+    "docker:down": "docker compose -f infra/docker/docker-compose.yml down"
   },
   "devDependencies": {
     "prettier": "^3.3.3",
