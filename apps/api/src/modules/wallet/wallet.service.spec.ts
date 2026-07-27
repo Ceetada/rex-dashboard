@@ -36,8 +36,14 @@ describe('WalletService', () => {
     };
   });
 
+  /**
+   * Keys must match the columns the service actually SELECTs. They were
+   * snake_case here originally, which is how a broken raw query passed the unit
+   * suite for so long — the mock simply agreed with the bug. The integration
+   * suite is what caught it, and this shape now mirrors the real result set.
+   */
   const wallet = (balance: bigint, overrides: Record<string, unknown> = {}) => [
-    { id: 'w1', balance, ledger_balance: balance, is_frozen: false, ...overrides },
+    { id: 'w1', balance, ledgerBalance: balance, isFrozen: false, ...overrides },
   ];
 
   describe('debit', () => {
@@ -97,7 +103,7 @@ describe('WalletService', () => {
     });
 
     it('blocks debits from a frozen wallet', async () => {
-      tx.$queryRaw.mockResolvedValue(wallet(100_000n, { is_frozen: true }));
+      tx.$queryRaw.mockResolvedValue(wallet(100_000n, { isFrozen: true }));
       await expect(
         service.debit(tx as never, {
           userId: 'u1', amountKobo: 1_000n, narration: 'x', transactionId: 't1',
@@ -117,7 +123,7 @@ describe('WalletService', () => {
   describe('credit', () => {
     it('still accepts money into a frozen wallet when allowFrozen is set', async () => {
       // Freezing stops money leaving, not refunds we owe the user.
-      tx.$queryRaw.mockResolvedValue(wallet(0n, { is_frozen: true }));
+      tx.$queryRaw.mockResolvedValue(wallet(0n, { isFrozen: true }));
       await expect(
         service.credit(tx as never, {
           userId: 'u1', amountKobo: 5_000n, narration: 'Refund', transactionId: 't1', allowFrozen: true,
@@ -126,7 +132,7 @@ describe('WalletService', () => {
     });
 
     it('blocks an ordinary credit into a frozen wallet', async () => {
-      tx.$queryRaw.mockResolvedValue(wallet(0n, { is_frozen: true }));
+      tx.$queryRaw.mockResolvedValue(wallet(0n, { isFrozen: true }));
       await expect(
         service.credit(tx as never, {
           userId: 'u1', amountKobo: 5_000n, narration: 'Funding', transactionId: 't1',

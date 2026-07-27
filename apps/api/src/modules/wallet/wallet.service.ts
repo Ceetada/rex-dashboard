@@ -67,19 +67,24 @@ export class WalletService {
     }
 
     // Row lock. Everything below this line is serialised per wallet.
+    //
+    // The identifiers are double-quoted because Prisma names columns after the
+    // model fields — "ledgerBalance", not ledger_balance — and PostgreSQL
+    // lower-cases anything unquoted. Dropping the quotes makes every debit fail
+    // with `column "ledgerbalance" does not exist`.
     const [wallet] = await tx.$queryRaw<
-      Array<{ id: string; balance: bigint; ledger_balance: bigint; is_frozen: boolean }>
+      Array<{ id: string; balance: bigint; ledgerBalance: bigint; isFrozen: boolean }>
     >`
-      SELECT id, balance, ledger_balance, is_frozen
+      SELECT id, balance, "ledgerBalance", "isFrozen"
       FROM wallets
-      WHERE user_id = ${userId}::uuid
+      WHERE "userId" = ${userId}::uuid
       FOR UPDATE
     `;
 
     if (!wallet) {
       throw new BadRequestException({ code: 'NO_WALLET', message: 'Wallet not found' });
     }
-    if (wallet.is_frozen) {
+    if (wallet.isFrozen) {
       throw new ConflictException({
         code: 'WALLET_FROZEN',
         message: 'Your wallet is on hold. Please contact support.',
@@ -100,7 +105,7 @@ export class WalletService {
       where: { id: wallet.id },
       data: {
         balance: balanceAfter,
-        ledgerBalance: wallet.ledger_balance - amountKobo,
+        ledgerBalance: wallet.ledgerBalance - amountKobo,
         version: { increment: 1 },
       },
     });
@@ -130,11 +135,11 @@ export class WalletService {
     }
 
     const [wallet] = await tx.$queryRaw<
-      Array<{ id: string; balance: bigint; ledger_balance: bigint; is_frozen: boolean }>
+      Array<{ id: string; balance: bigint; ledgerBalance: bigint; isFrozen: boolean }>
     >`
-      SELECT id, balance, ledger_balance, is_frozen
+      SELECT id, balance, "ledgerBalance", "isFrozen"
       FROM wallets
-      WHERE user_id = ${userId}::uuid
+      WHERE "userId" = ${userId}::uuid
       FOR UPDATE
     `;
 
@@ -142,7 +147,7 @@ export class WalletService {
 
     // A frozen wallet still accepts refunds and reversals — freezing stops
     // money leaving, not money being returned to a user we owe.
-    if (wallet.is_frozen && !allowFrozen) {
+    if (wallet.isFrozen && !allowFrozen) {
       throw new ConflictException({ code: 'WALLET_FROZEN', message: 'Wallet is on hold' });
     }
 
@@ -152,7 +157,7 @@ export class WalletService {
       where: { id: wallet.id },
       data: {
         balance: balanceAfter,
-        ledgerBalance: wallet.ledger_balance + amountKobo,
+        ledgerBalance: wallet.ledgerBalance + amountKobo,
         version: { increment: 1 },
       },
     });
@@ -229,11 +234,11 @@ export class WalletService {
    * same money while the first is still pending at the provider.
    */
   async hold(tx: Prisma.TransactionClient, userId: string, amountKobo: bigint): Promise<void> {
-    const [wallet] = await tx.$queryRaw<Array<{ id: string; balance: bigint; ledger_balance: bigint }>>`
-      SELECT id, balance, ledger_balance FROM wallets WHERE user_id = ${userId}::uuid FOR UPDATE
+    const [wallet] = await tx.$queryRaw<Array<{ id: string; balance: bigint; ledgerBalance: bigint }>>`
+      SELECT id, balance, "ledgerBalance" FROM wallets WHERE "userId" = ${userId}::uuid FOR UPDATE
     `;
     if (!wallet) throw new BadRequestException({ code: 'NO_WALLET', message: 'Wallet not found' });
-    if (wallet.ledger_balance < amountKobo) {
+    if (wallet.ledgerBalance < amountKobo) {
       throw new ConflictException({
         code: 'INSUFFICIENT_FUNDS',
         message: 'Your wallet balance is too low for this transaction',
@@ -241,7 +246,7 @@ export class WalletService {
     }
     await tx.wallet.update({
       where: { id: wallet.id },
-      data: { ledgerBalance: wallet.ledger_balance - amountKobo, version: { increment: 1 } },
+      data: { ledgerBalance: wallet.ledgerBalance - amountKobo, version: { increment: 1 } },
     });
   }
 
